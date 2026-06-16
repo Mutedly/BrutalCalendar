@@ -576,6 +576,23 @@
     .stage.secondary-stage .date-badge { background: var(--gold); color: #161616; }
     .band.ended .date-badge { background: var(--ink-faint); color: #0a0a0a; }
 
+    /* Duration chip — how long the show lasts */
+    .dur-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      color: var(--ink-dim);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      white-space: nowrap;
+    }
+
     /* Overlap warning badge inside a band card */
     .overlap-badge {
       display: inline-flex;
@@ -1606,6 +1623,23 @@
 
   function startMs(b) { return dtMs(b.date, b.time); }
 
+  // Compact duration label, e.g. "1h 15m", "45m", "2h".
+  function fmtDuration(min) {
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h && m) return h + "h " + m + "m";
+    if (h) return h + "h";
+    return m + "m";
+  }
+
+  // Show length in minutes, only when an explicit end time exists.
+  function bandDuration(b) {
+    if (!b.end) return null;
+    const s = startMs(b), e = endMs(b);
+    if (s === null || e === null) return null;
+    const min = Math.round((e - s) / 60000);
+    return min > 0 ? min : null;
+  }
+
   // End instant. No end time -> assume a ~90 minute set; crossing midnight
   // rolls the end to the next day.
   function endMs(b) {
@@ -1973,6 +2007,8 @@
     // Clear, prominent date badge; end time stays as a small meta line.
     const ds = fmtDateShort(b.date);
     const dateBadge = ds ? `<span class="date-badge">${esc(ds.toUpperCase())}</span>` : "";
+    const dur = bandDuration(b);
+    const durBadge = dur ? `<span class="dur-badge">&#9201; ${esc(fmtDuration(dur))}</span>` : "";
     const metaLine = b.end ? `<div class="endtime">&#8594; ends ${esc(b.end)}</div>` : "";
     const clashes = overlapMap[b.id];
     const overlapBadge = clashes && clashes.length
@@ -1982,7 +2018,7 @@
       <div class="band ${starred ? "starred" : ""} ${finished ? "ended" : ""} ${cls === "active" ? "live" : ""} ${clashes && clashes.length ? "has-overlap" : ""}">
         <div class="time">${esc(time)}<small>${cls === "active" ? "Live" : "Start"}</small></div>
         <div class="body">
-          <div class="badges-row">${dateBadge}${overlapBadge}</div>
+          <div class="badges-row">${dateBadge}${durBadge}${overlapBadge}</div>
           <div class="name">${esc(b.name)}</div>
           ${metaLine}
           ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
