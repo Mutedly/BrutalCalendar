@@ -16,6 +16,10 @@
   <!-- Inline favicon so we never hit the network -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230a0a0a'/><text x='50' y='72' font-size='70' text-anchor='middle' fill='%23e11d1d' font-family='monospace'>BA</text></svg>" />
 
+  <!-- Real PWA wiring (manifest + installable icons) -->
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+
   <title>Brutal Assault — Schedule</title>
 
   <style>
@@ -1744,6 +1748,16 @@
   }
 
   document.addEventListener("DOMContentLoaded", init);
+
+  /* Register the service worker for offline/installable PWA support.
+     Guarded so the app still runs fine when opened from file:// where
+     service workers are unavailable. */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch((e) =>
+        console.warn("Service worker registration skipped:", e));
+    });
+  }
   </script>
 </body>
 </html>
