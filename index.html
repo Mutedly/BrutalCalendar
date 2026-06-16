@@ -319,6 +319,28 @@
     }
     .mini:active { transform: scale(0.92); }
     .mini.star.on { color: var(--star); border-color: rgba(255,204,51,0.5); }
+    .mini.check.on { color: #22c55e; border-color: rgba(34,197,94,0.6); background: rgba(34,197,94,0.12); }
+
+    /* Ended shows: dimmed + struck through, moved to bottom section */
+    .band.ended { opacity: .55; border-left-color: #3a3a3a; }
+    .band.ended .name { text-decoration: line-through; text-decoration-color: var(--ink-faint); }
+    .band.ended .time { color: var(--ink-dim); }
+
+    .ended-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 22px 2px 12px;
+    }
+    .ended-line { flex: 1; height: 1px; background: var(--line); }
+    .ended-title {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 800;
+      color: #22c55e;
+    }
 
     /* Empty state */
     .empty {
@@ -660,6 +682,7 @@
 
   const LS_SCHEDULE = "ba_schedule_v1";
   const LS_PICKS = "ba_picks_v1";
+  const LS_ENDED = "ba_ended_v1";
 
   // ---- Default example data (used on first run / reset) -----------
   function defaultSchedule() {
@@ -695,7 +718,8 @@
 
   // ---- State -----------------------------------------------------
   let schedule = {};
-  let picks = {};          // { bandId: true }
+  let picks = {};          // { bandId: true } — starred / My Picks
+  let ended = {};          // { bandId: true } — shows that already happened
   let currentStageIndex = 0;
   let panelMode = "all";   // "all" | "picks"
 
@@ -746,6 +770,17 @@
     }
   }
 
+  function loadEnded() {
+    try {
+      const raw = localStorage.getItem(LS_ENDED);
+      const data = raw ? JSON.parse(raw) : {};
+      ended = (data && typeof data === "object" && !Array.isArray(data)) ? data : {};
+    } catch (e) {
+      console.warn("Ended data corrupted, resetting.", e);
+      ended = {};
+    }
+  }
+
   function saveSchedule() {
     try { localStorage.setItem(LS_SCHEDULE, JSON.stringify(schedule)); }
     catch (e) { console.warn("Could not save schedule.", e); toast("Storage unavailable"); }
@@ -753,6 +788,10 @@
   function savePicks() {
     try { localStorage.setItem(LS_PICKS, JSON.stringify(picks)); }
     catch (e) { console.warn("Could not save picks.", e); }
+  }
+  function saveEnded() {
+    try { localStorage.setItem(LS_ENDED, JSON.stringify(ended)); }
+    catch (e) { console.warn("Could not save ended shows.", e); }
   }
 
   /* =================================================================
@@ -810,20 +849,40 @@
       const bands = schedule[stage];
       const badgeLabel = type === "main" ? "MAIN STAGE" : "SECONDARY STAGE";
 
+      // Split into upcoming (active) and ended shows. Both stay time-sorted.
+      const active = bands.filter(b => !ended[b.id]);
+      const finished = bands.filter(b => ended[b.id]);
+
       let rows = "";
       if (bands.length === 0) {
         rows = `<div class="empty"><span class="skull">&#128128;</span>No bands yet on this stage.<br/>Tap + to add one.</div>`;
+      } else if (active.length === 0) {
+        rows = `<div class="empty"><span class="skull">&#9989;</span>All shows on this stage have ended.</div>`;
       } else {
-        rows = bands.map(b => bandRow(b)).join("");
+        rows = active.map(b => bandRow(b)).join("");
+      }
+
+      // "ENDED SHOWS" section only appears once something is checked off.
+      let endedBlock = "";
+      if (finished.length > 0) {
+        endedBlock = `
+          <div class="ended-head">
+            <span class="ended-line"></span>
+            <span class="ended-title">&#9989; Ended Shows (${finished.length})</span>
+            <span class="ended-line"></span>
+          </div>
+          <div class="timeline ended-list">${finished.map(b => bandRow(b)).join("")}</div>
+        `;
       }
 
       section.innerHTML = `
         <div class="stage-head">
           <span class="badge ${type}">${badgeLabel}</span>
           <h2>${esc(stage)}</h2>
-          <div class="count">${bands.length} band${bands.length === 1 ? "" : "s"} scheduled</div>
+          <div class="count">${active.length} upcoming &middot; ${finished.length} ended</div>
         </div>
         <div class="timeline">${rows}</div>
+        ${endedBlock}
       `;
       wrap.appendChild(section);
     });
@@ -833,13 +892,16 @@
       el.addEventListener("click", () => openSheet(el.getAttribute("data-edit"))));
     wrap.querySelectorAll("[data-star]").forEach(el =>
       el.addEventListener("click", () => toggleStar(el.getAttribute("data-star"))));
+    wrap.querySelectorAll("[data-end]").forEach(el =>
+      el.addEventListener("click", () => toggleEnded(el.getAttribute("data-end"))));
   }
 
   function bandRow(b) {
     const starred = !!picks[b.id];
+    const isEnded = !!ended[b.id];
     const time = b.time || "--:--";
     return `
-      <div class="band ${starred ? "starred" : ""}">
+      <div class="band ${starred ? "starred" : ""} ${isEnded ? "ended" : ""}">
         <div class="time">${esc(time)}<small>Start</small></div>
         <div class="body">
           <div class="name">${esc(b.name)}</div>
@@ -847,6 +909,7 @@
         </div>
         <div class="actions">
           <button class="mini star ${starred ? "on" : ""}" data-star="${b.id}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
+          <button class="mini check ${isEnded ? "on" : ""}" data-end="${b.id}" aria-label="Mark as ended">&#10003;</button>
           <button class="mini" data-edit="${b.id}" aria-label="Edit">&#9998;</button>
         </div>
       </div>`;
@@ -982,8 +1045,10 @@
     if (found) {
       schedule[found.stage].splice(found.idx, 1);
       delete picks[id];
+      delete ended[id];
       saveSchedule();
       savePicks();
+      saveEnded();
       renderStages();
       toast("Band deleted");
     }
@@ -998,6 +1063,15 @@
     if (picks[id]) delete picks[id];
     else picks[id] = true;
     savePicks();
+    renderStages();
+    refreshPanelIfOpen();
+  }
+
+  // Mark / unmark a show as ended — moves it to the "ENDED SHOWS" section.
+  function toggleEnded(id) {
+    if (ended[id]) { delete ended[id]; toast("Moved back to upcoming"); }
+    else { ended[id] = true; toast("Moved to ended shows"); }
+    saveEnded();
     renderStages();
     refreshPanelIfOpen();
   }
@@ -1088,8 +1162,10 @@
     if (!confirm("Reset to the default example schedule? Your changes and picks will be lost.")) return;
     schedule = defaultSchedule();
     picks = {};
+    ended = {};
     saveSchedule();
     savePicks();
+    saveEnded();
     renderStages();
     goToStage(0);
     refreshPanelIfOpen();
@@ -1114,6 +1190,7 @@
   function init() {
     loadSchedule();
     loadPicks();
+    loadEnded();
     renderTabs();
     renderStages();
     watchScroll();
