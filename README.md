@@ -30,6 +30,6 @@ All application logic lives in a single `index.html` (vanilla HTML/CSS/JS, no fr
 - **Overlap detection** — clashing shows get a ⚠ OVERLAP badge (tap to see what they clash with); a Settings "Schedule Check" lists every overlapping pair.
 - **Per-stage sorting** — order each stage by start time, A–Z, or starred-first.
 - Search across all stages and a starred **My Picks** view.
-- Settings: hide the reset button, export to calendar (.ics, one-tap on iPhone), switch layout (swipe vs stacked), export/import the schedule as JSON, and define a custom rollback point.
+- Settings: hide the reset button, export to calendar (.ics, one-tap on iPhone), export the whole schedule as a table for Word / Google Docs (.doc), switch layout (swipe vs stacked), export/import the schedule as JSON, and define a custom rollback point.
 - Multi-step custom confirmation dialogs (no native `alert`/`confirm`).
 - All data saved instantly to `localStorage`; resilient to empty/corrupt storage.

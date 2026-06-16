@@ -1225,6 +1225,13 @@
         <p class="settings-note small">Export backs up every band, star and ended mark. Import replaces your current schedule.</p>
       </div>
 
+      <!-- Document export (Word / Google Docs) -->
+      <div class="settings-group">
+        <div class="settings-label">Document Export</div>
+        <button type="button" class="btn btn-ghost" id="docBtn">&#128196; Export as table (Word / Google Docs)</button>
+        <p class="settings-note small">Downloads a <b>.doc</b> table of every band. Opens directly in Microsoft Word. For Google Docs: upload the file to Google Drive and open it with Google Docs (it converts automatically).</p>
+      </div>
+
       <!-- Rollback configuration -->
       <div class="settings-group danger-group">
         <div class="settings-label">Rollback Point</div>
@@ -2440,6 +2447,66 @@
     }
   }
 
+  // Trigger a file download from in-memory content.
+  function downloadFile(content, filename, mime) {
+    try {
+      const url = URL.createObjectURL(new Blob([content], { type: mime + ";charset=utf-8" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      return true;
+    } catch (e) {
+      console.warn("Download failed", e);
+      showAlert("Export failed", "Could not generate the file on this device.");
+      return false;
+    }
+  }
+
+  /* Export every band as a table in a Word-compatible .doc (HTML-based).
+     Opens directly in Microsoft Word; Google Docs opens it after the file
+     is uploaded to Drive (it auto-converts). No backend/libraries. */
+  function exportDocTable() {
+    const rows = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => rows.push({ b, stage })));
+    if (!rows.length) { showAlert("Nothing to export", "Add some bands first."); return; }
+    rows.sort((x, y) => {
+      const sx = startMs(x.b), sy = startMs(y.b);
+      return (sx === null ? Infinity : sx) - (sy === null ? Infinity : sy);
+    });
+
+    const headCells = ["Date", "Start", "End", "Length", "Stage", "Band", "\u2605", "Notes"];
+    const thStyle = "border:1px solid #888;padding:6px 8px;background:#d9d9d9;text-align:left;";
+    const tdStyle = "border:1px solid #888;padding:6px 8px;vertical-align:top;";
+    const headRow = "<tr>" + headCells.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join("") + "</tr>";
+    const bodyRows = rows.map(({ b, stage }) => {
+      const dur = bandDuration(b);
+      const cells = [
+        fmtDateShort(b.date) || "", b.time || "", b.end || "",
+        dur ? fmtDuration(dur) : "", stage, b.name || "",
+        picks[b.id] ? "\u2605" : "", b.notes || ""
+      ];
+      return "<tr>" + cells.map(c => `<td style="${tdStyle}">${esc(c)}</td>`).join("") + "</tr>";
+    }).join("");
+
+    const html = "\uFEFF" +
+      "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+      "xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>" +
+      "<head><meta charset='utf-8'><title>Brutal Assault Schedule</title></head>" +
+      "<body style=\"font-family:Arial,Helvetica,sans-serif;\">" +
+      "<h1 style=\"font-family:Arial,Helvetica,sans-serif;\">Brutal Assault — Band Schedule</h1>" +
+      `<p>Exported ${esc(new Date().toLocaleString())} &middot; ${rows.length} bands</p>` +
+      `<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:11pt;width:100%;">` +
+      headRow + bodyRows + "</table></body></html>";
+
+    if (downloadFile(html, "brutal-assault-" + todayStr() + ".doc", "application/msword")) {
+      toast("Table exported (" + rows.length + " bands)");
+    }
+  }
+
   async function importConfigFile(file) {
     if (!file) return;
     let data;
@@ -2847,6 +2914,7 @@
     document.getElementById("overlapsBtn").addEventListener("click", openOverlapsPopup);
     document.getElementById("setLayout").addEventListener("change", changeLayout);
     document.getElementById("exportBtn").addEventListener("click", exportConfig);
+    document.getElementById("docBtn").addEventListener("click", exportDocTable);
     document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
     document.getElementById("importFile").addEventListener("change", (e) => {
       const f = e.target.files && e.target.files[0];
