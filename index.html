@@ -553,6 +553,117 @@
     }
     .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 
+    /* ============================================================
+       SETTINGS SHEET
+       ============================================================ */
+    .settings-group {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 14px;
+      background: var(--bg-card);
+    }
+    .settings-group.danger-group { border-color: rgba(255,59,59,0.35); }
+    .settings-label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+    .settings-note { font-size: 13px; color: var(--ink-dim); margin: 0 0 12px; line-height: 1.4; }
+    .settings-note.small { font-size: 11px; color: var(--ink-faint); margin: 8px 0 0; }
+    .settings-group .btn { margin-bottom: 8px; }
+    .settings-group .btn:last-child { margin-bottom: 0; }
+    .settings-divider { height: 1px; background: var(--line); margin: 6px 0 12px; }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      cursor: pointer;
+    }
+    .toggle-row span { font-size: 15px; font-weight: 600; }
+    .toggle-row span small {
+      display: block;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--ink-faint);
+      margin-top: 3px;
+    }
+    /* iOS-style switch built from a checkbox */
+    .switch {
+      appearance: none;
+      -webkit-appearance: none;
+      flex: 0 0 auto;
+      width: 52px;
+      height: 30px;
+      border-radius: 99px;
+      background: var(--line);
+      position: relative;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .2s;
+    }
+    .switch:checked { background: var(--accent); }
+    .switch:checked::after { transform: translateX(22px); }
+
+    /* ============================================================
+       GENERIC CUSTOM DIALOG
+       ============================================================ */
+    .dialog-overlay { align-items: center; padding: 20px; z-index: 150; }
+    .dialog {
+      width: 100%;
+      max-width: 420px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px 20px 18px;
+      text-align: center;
+      transform: scale(0.9);
+      opacity: 0;
+      transition: transform .2s ease, opacity .2s ease;
+    }
+    .dialog-overlay.open .dialog { transform: scale(1); opacity: 1; }
+    .dlg-icon { font-size: 40px; line-height: 1; margin-bottom: 10px; }
+    .dialog.danger { border-color: rgba(255,59,59,0.5); }
+    .dialog.danger .dlg-icon { color: var(--accent-2); }
+    .dialog h3 {
+      margin: 0 0 8px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-size: 17px;
+    }
+    .dialog p { margin: 0 0 16px; color: var(--ink-dim); font-size: 14px; line-height: 1.5; }
+    .dlg-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      text-align: left;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .dlg-check input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--accent); }
+    .dialog .row-btns { margin-top: 0; }
+    .btn:disabled { opacity: .4; pointer-events: none; }
+
     /* Toast */
     .toast {
       position: fixed;
@@ -589,7 +700,8 @@
       <div class="tools">
         <button class="icon-btn" id="btnPicks" title="My Picks" aria-label="My Picks">&#9733;</button>
         <button class="icon-btn" id="btnSearch" title="Search" aria-label="Search">&#128269;</button>
-        <button class="icon-btn" id="btnReset" title="Reset to defaults" aria-label="Reset">&#8634;</button>
+        <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings">&#9881;</button>
+        <button class="icon-btn" id="btnReset" title="Reset to rollback point" aria-label="Reset">&#8634;</button>
       </div>
     </div>
     <nav class="stages" id="tabs"><!-- tabs injected by JS --></nav>
@@ -662,6 +774,62 @@
     <div class="results" id="results"></div>
   </div>
 
+  <!-- ============================================================
+       SETTINGS BOTTOM SHEET
+       ============================================================ -->
+  <div class="overlay" id="settingsOverlay">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="grip"></div>
+      <h3 id="settingsTitle">Settings</h3>
+
+      <!-- Display options -->
+      <div class="settings-group">
+        <div class="settings-label">Display</div>
+        <label class="toggle-row" for="setShowReset">
+          <span>
+            Show reset button in top bar
+            <small>Hide the &#8634; button to avoid accidental taps.</small>
+          </span>
+          <input type="checkbox" id="setShowReset" class="switch" />
+        </label>
+      </div>
+
+      <!-- Rollback configuration -->
+      <div class="settings-group danger-group">
+        <div class="settings-label">Rollback Point</div>
+        <p class="settings-note" id="rollbackStatus"></p>
+        <button type="button" class="btn btn-ghost" id="saveRollbackBtn">&#128190; Save current schedule as rollback point</button>
+        <button type="button" class="btn btn-ghost hidden" id="clearRollbackBtn">&#9851; Use built-in example data instead</button>
+        <div class="settings-divider"></div>
+        <button type="button" class="btn btn-danger" id="doResetBtn">&#9888; Reset / Roll back now</button>
+        <p class="settings-note small">This restores the rollback point and discards your current changes.</p>
+      </div>
+
+      <div class="row-btns">
+        <button type="button" class="btn btn-ghost" id="settingsClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       GENERIC CUSTOM DIALOG (replaces native alert/confirm)
+       ============================================================ -->
+  <div class="overlay dialog-overlay" id="dialogOverlay">
+    <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dlgTitle">
+      <div class="dlg-icon" id="dlgIcon">&#9888;</div>
+      <h3 id="dlgTitle"></h3>
+      <p id="dlgMsg"></p>
+      <label class="dlg-check hidden" id="dlgCheckWrap">
+        <input type="checkbox" id="dlgCheck" />
+        <span id="dlgCheckLabel"></span>
+      </label>
+      <div class="row-btns">
+        <button type="button" class="btn btn-ghost hidden" id="dlgCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="dlgConfirm">OK</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -683,6 +851,8 @@
   const LS_SCHEDULE = "ba_schedule_v1";
   const LS_PICKS = "ba_picks_v1";
   const LS_ENDED = "ba_ended_v1";
+  const LS_SETTINGS = "ba_settings_v1";
+  const LS_ROLLBACK = "ba_rollback_v1";
 
   // ---- Default example data (used on first run / reset) -----------
   function defaultSchedule() {
@@ -720,8 +890,12 @@
   let schedule = {};
   let picks = {};          // { bandId: true } — starred / My Picks
   let ended = {};          // { bandId: true } — shows that already happened
+  let settings = {};       // { showReset: bool }
+  let rollback = null;     // user-defined snapshot to roll back to (or null = built-in)
   let currentStageIndex = 0;
   let panelMode = "all";   // "all" | "picks"
+
+  const DEFAULT_SETTINGS = { showReset: true };
 
   /* =================================================================
      PERSISTENCE — resilient to empty / corrupted localStorage.
@@ -792,6 +966,58 @@
   function saveEnded() {
     try { localStorage.setItem(LS_ENDED, JSON.stringify(ended)); }
     catch (e) { console.warn("Could not save ended shows.", e); }
+  }
+
+  function loadSettings() {
+    let data = null;
+    try {
+      const raw = localStorage.getItem(LS_SETTINGS);
+      if (raw) data = JSON.parse(raw);
+    } catch (e) { console.warn("Settings corrupted, using defaults.", e); }
+    settings = Object.assign({}, DEFAULT_SETTINGS, (data && typeof data === "object" ? data : {}));
+  }
+  function saveSettings() {
+    try { localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
+    catch (e) { console.warn("Could not save settings.", e); }
+  }
+
+  // The rollback snapshot stores a full state bundle the user chose to keep.
+  function loadRollback() {
+    try {
+      const raw = localStorage.getItem(LS_ROLLBACK);
+      if (!raw) { rollback = null; return; }
+      const data = JSON.parse(raw);
+      const clean = sanitizeSchedule(data && data.schedule);
+      rollback = clean ? {
+        schedule: clean,
+        picks: (data.picks && typeof data.picks === "object") ? data.picks : {},
+        ended: (data.ended && typeof data.ended === "object") ? data.ended : {},
+        savedAt: typeof data.savedAt === "string" ? data.savedAt : ""
+      } : null;
+    } catch (e) {
+      console.warn("Rollback snapshot corrupted, ignoring.", e);
+      rollback = null;
+    }
+  }
+  function saveRollbackSnapshot() {
+    rollback = {
+      schedule: JSON.parse(JSON.stringify(schedule)),
+      picks: JSON.parse(JSON.stringify(picks)),
+      ended: JSON.parse(JSON.stringify(ended)),
+      savedAt: new Date().toISOString()
+    };
+    try { localStorage.setItem(LS_ROLLBACK, JSON.stringify(rollback)); }
+    catch (e) { console.warn("Could not save rollback snapshot.", e); }
+  }
+  function clearRollbackSnapshot() {
+    rollback = null;
+    try { localStorage.removeItem(LS_ROLLBACK); }
+    catch (e) { console.warn("Could not clear rollback snapshot.", e); }
+  }
+
+  // Total bands across all stages — used in warning messages.
+  function totalBands() {
+    return STAGES.reduce((n, s) => n + (schedule[s] ? schedule[s].length : 0), 0);
   }
 
   /* =================================================================
@@ -1156,20 +1382,210 @@
   }
 
   /* =================================================================
-     RESET
+     RESET / ROLLBACK — guarded by multiple custom confirmations.
+     Rolls back to the user's saved snapshot if one exists,
+     otherwise to the built-in example schedule.
      ================================================================= */
-  function resetData() {
-    if (!confirm("Reset to the default example schedule? Your changes and picks will be lost.")) return;
-    schedule = defaultSchedule();
-    picks = {};
-    ended = {};
+  function rollbackTargetLabel() {
+    if (rollback) {
+      const n = STAGES.reduce((c, s) => c + (rollback.schedule[s] ? rollback.schedule[s].length : 0), 0);
+      let when = "";
+      if (rollback.savedAt) {
+        const d = new Date(rollback.savedAt);
+        if (!isNaN(d)) when = " · saved " + d.toLocaleString();
+      }
+      return `your saved rollback point (${n} bands${when})`;
+    }
+    return "the built-in example schedule";
+  }
+
+  async function resetData() {
+    const target = rollbackTargetLabel();
+
+    // WARNING 1 — explain + require an explicit "I understand" checkbox.
+    const step1 = await showDialog({
+      title: "Roll back schedule?",
+      message: `This will replace your current schedule (<b>${totalBands()} bands</b>) with <b>${target}</b>.<br><br>Your current bands, picks and ended marks will be <b>permanently lost</b>.`,
+      icon: "&#9888;",
+      danger: true,
+      confirmText: "Continue",
+      cancelText: "Cancel",
+      checkLabel: "I understand my current changes will be permanently lost."
+    });
+    if (!step1) return;
+
+    // WARNING 2 — final, last-chance confirmation.
+    const step2 = await showDialog({
+      title: "Are you absolutely sure?",
+      message: "This action <b>cannot be undone</b>. There is no automatic backup of your current schedule.",
+      icon: "&#128165;",
+      danger: true,
+      confirmText: "Yes, roll back now",
+      cancelText: "Keep my schedule"
+    });
+    if (!step2) return;
+
+    applyRollback();
+  }
+
+  function applyRollback() {
+    if (rollback) {
+      schedule = sanitizeSchedule(rollback.schedule) || defaultSchedule();
+      picks = JSON.parse(JSON.stringify(rollback.picks || {}));
+      ended = JSON.parse(JSON.stringify(rollback.ended || {}));
+    } else {
+      schedule = defaultSchedule();
+      picks = {};
+      ended = {};
+    }
     saveSchedule();
     savePicks();
     saveEnded();
     renderStages();
     goToStage(0);
     refreshPanelIfOpen();
-    toast("Reset to defaults");
+    toast("Schedule rolled back");
+  }
+
+  /* =================================================================
+     SETTINGS
+     ================================================================= */
+  const settingsOverlay = document.getElementById("settingsOverlay");
+
+  function applySettings() {
+    // Show / hide the top-bar reset button per user preference.
+    document.getElementById("btnReset").classList.toggle("hidden", !settings.showReset);
+  }
+
+  function renderSettings() {
+    document.getElementById("setShowReset").checked = !!settings.showReset;
+    const status = document.getElementById("rollbackStatus");
+    if (rollback) {
+      const n = STAGES.reduce((c, s) => c + (rollback.schedule[s] ? rollback.schedule[s].length : 0), 0);
+      let when = "";
+      if (rollback.savedAt) {
+        const d = new Date(rollback.savedAt);
+        if (!isNaN(d)) when = " (saved " + d.toLocaleString() + ")";
+      }
+      status.innerHTML = `Reset will roll back to your <b>custom snapshot</b> — ${n} bands${esc(when)}.`;
+      document.getElementById("clearRollbackBtn").classList.remove("hidden");
+    } else {
+      status.innerHTML = `Reset will roll back to the <b>built-in example schedule</b>. Save a snapshot below to choose your own rollback point.`;
+      document.getElementById("clearRollbackBtn").classList.add("hidden");
+    }
+  }
+
+  function openSettings() {
+    renderSettings();
+    settingsOverlay.classList.add("open");
+  }
+  function closeSettings() {
+    settingsOverlay.classList.remove("open");
+  }
+
+  async function saveRollback() {
+    if (rollback) {
+      const ok = await showDialog({
+        title: "Overwrite rollback point?",
+        message: "You already have a saved rollback point. Replace it with the current schedule?",
+        icon: "&#128190;",
+        confirmText: "Overwrite",
+        cancelText: "Cancel"
+      });
+      if (!ok) return;
+    }
+    saveRollbackSnapshot();
+    renderSettings();
+    toast("Rollback point saved");
+  }
+
+  async function clearRollback() {
+    const ok = await showDialog({
+      title: "Clear rollback point?",
+      message: "Reset will go back to using the <b>built-in example schedule</b>. Your current schedule is not affected.",
+      icon: "&#9851;",
+      confirmText: "Clear",
+      cancelText: "Cancel"
+    });
+    if (!ok) return;
+    clearRollbackSnapshot();
+    renderSettings();
+    toast("Using built-in defaults");
+  }
+
+  function toggleShowReset(e) {
+    settings.showReset = e.target.checked;
+    saveSettings();
+    applySettings();
+  }
+
+  /* =================================================================
+     CUSTOM DIALOG SYSTEM — replaces native alert() / confirm().
+     Returns a Promise<boolean> (true = confirmed, false = cancelled).
+     opts: { title, message, icon, confirmText, cancelText, danger,
+             checkLabel }  — if checkLabel is set, confirm is disabled
+     until the checkbox is ticked.
+     ================================================================= */
+  let dialogResolver = null;
+
+  function showDialog(opts) {
+    const o = opts || {};
+    const overlay = document.getElementById("dialogOverlay");
+    const dialog = overlay.querySelector(".dialog");
+    const checkWrap = document.getElementById("dlgCheckWrap");
+    const check = document.getElementById("dlgCheck");
+    const confirmBtn = document.getElementById("dlgConfirm");
+    const cancelBtn = document.getElementById("dlgCancel");
+
+    document.getElementById("dlgIcon").innerHTML = o.icon || "&#9888;";
+    document.getElementById("dlgTitle").textContent = o.title || "";
+    document.getElementById("dlgMsg").innerHTML = o.message || "";
+    confirmBtn.textContent = o.confirmText || "OK";
+    dialog.classList.toggle("danger", !!o.danger);
+    confirmBtn.className = "btn " + (o.danger ? "btn-danger" : "btn-primary");
+
+    // Cancel button only shown for confirm-style dialogs.
+    if (o.cancelText === null) {
+      cancelBtn.classList.add("hidden");
+    } else {
+      cancelBtn.classList.remove("hidden");
+      cancelBtn.textContent = o.cancelText || "Cancel";
+    }
+
+    // Optional "I understand" checkbox gate.
+    check.checked = false;
+    if (o.checkLabel) {
+      checkWrap.classList.remove("hidden");
+      document.getElementById("dlgCheckLabel").textContent = o.checkLabel;
+      confirmBtn.disabled = true;
+      check.onchange = () => { confirmBtn.disabled = !check.checked; };
+    } else {
+      checkWrap.classList.add("hidden");
+      confirmBtn.disabled = false;
+      check.onchange = null;
+    }
+
+    overlay.classList.add("open");
+
+    return new Promise(resolve => {
+      dialogResolver = resolve;
+      const done = (result) => {
+        overlay.classList.remove("open");
+        confirmBtn.onclick = null;
+        cancelBtn.onclick = null;
+        overlay.onclick = null;
+        dialogResolver = null;
+        resolve(result);
+      };
+      confirmBtn.onclick = () => done(true);
+      cancelBtn.onclick = () => done(false);
+      overlay.onclick = (e) => { if (e.target === overlay) done(false); };
+    });
+  }
+
+  // Convenience: information popup with a single OK button.
+  function showAlert(title, message, icon) {
+    return showDialog({ title, message, icon: icon || "&#8505;", cancelText: null, confirmText: "OK" });
   }
 
   /* =================================================================
@@ -1191,8 +1607,11 @@
     loadSchedule();
     loadPicks();
     loadEnded();
+    loadSettings();
+    loadRollback();
     renderTabs();
     renderStages();
+    applySettings();
     watchScroll();
 
     document.getElementById("fab").addEventListener("click", () => openSheet(null));
@@ -1207,13 +1626,28 @@
     document.getElementById("btnSearch").addEventListener("click", () => openPanel("all"));
     document.getElementById("btnPicks").addEventListener("click", () => openPanel("picks"));
     document.getElementById("panelClose").addEventListener("click", closePanel);
+
+    // Settings sheet
+    document.getElementById("btnSettings").addEventListener("click", openSettings);
+    document.getElementById("settingsClose").addEventListener("click", closeSettings);
+    settingsOverlay.addEventListener("click", (e) => { if (e.target === settingsOverlay) closeSettings(); });
+    document.getElementById("setShowReset").addEventListener("change", toggleShowReset);
+    document.getElementById("saveRollbackBtn").addEventListener("click", saveRollback);
+    document.getElementById("clearRollbackBtn").addEventListener("click", clearRollback);
+    document.getElementById("doResetBtn").addEventListener("click", resetData);
     document.getElementById("searchInput").addEventListener("input", renderResults);
     document.querySelectorAll("#panelSeg button").forEach(b =>
       b.addEventListener("click", () => openPanel(b.dataset.mode)));
 
     // Escape key closes overlays (handy when testing on desktop).
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { closeSheet(); closePanel(); }
+      if (e.key === "Escape") {
+        // Dialog takes priority — cancel it instead of closing everything.
+        if (dialogResolver) { document.getElementById("dlgCancel").click(); return; }
+        closeSheet();
+        closePanel();
+        closeSettings();
+      }
     });
 
     setActiveTab(0);
