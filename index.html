@@ -499,21 +499,35 @@
     .band.ended .name { text-decoration: line-through; text-decoration-color: var(--ink-faint); }
     .band.ended .time { color: var(--ink-dim); }
 
-    .ended-head {
+    .sec-head {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin: 22px 2px 12px;
+      margin: 20px 2px 12px;
     }
-    .ended-line { flex: 1; height: 1px; background: var(--line); }
-    .ended-title {
+    .sec-head:first-child { margin-top: 4px; }
+    .sec-line { flex: 1; height: 1px; background: var(--line); }
+    .sec-title {
       font-family: var(--mono);
       font-size: 12px;
       letter-spacing: 2px;
       text-transform: uppercase;
       font-weight: 800;
-      color: #22c55e;
+      white-space: nowrap;
     }
+    .sec-active .sec-title { color: #22c55e; }
+    .sec-active .sec-line { background: rgba(34,197,94,0.4); }
+    .sec-upcoming .sec-title { color: var(--accent-2); }
+    .sec-ended .sec-title { color: var(--ink-faint); }
+
+    /* Currently-playing band — green glow */
+    .band.live {
+      border-left-color: #22c55e;
+      box-shadow: 0 0 0 1px rgba(34,197,94,0.35), 0 0 18px rgba(34,197,94,0.18);
+    }
+    .band.live .time small { color: #22c55e; }
+
+    .empty.small { padding: 18px 16px; font-size: 13px; }
 
     /* Empty state */
     .empty {
@@ -791,6 +805,19 @@
     .switch:checked { background: var(--accent); }
     .switch:checked::after { transform: translateX(22px); }
 
+    .lead-select {
+      flex: 0 0 auto;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 15px;
+      font-family: var(--font);
+      font-weight: 700;
+    }
+    .lead-select:focus { outline: none; border-color: var(--accent); }
+
     /* ============================================================
        GENERIC CUSTOM DIALOG
        ============================================================ */
@@ -957,6 +984,12 @@
           <div class="err">Band name is required.</div>
         </div>
 
+        <div class="field" id="f-date">
+          <label for="iDate">Date</label>
+          <input type="date" id="iDate" />
+          <div class="err">Date is required.</div>
+        </div>
+
         <div class="field" id="f-time">
           <label for="iTime">Start Time</label>
           <input type="time" id="iTime" />
@@ -1024,6 +1057,35 @@
           </span>
           <input type="checkbox" id="setShowReset" class="switch" />
         </label>
+      </div>
+
+      <!-- Notifications -->
+      <div class="settings-group">
+        <div class="settings-label">Reminders</div>
+        <label class="toggle-row" for="setNotify">
+          <span>
+            Notify before a show
+            <small>Get a heads-up before a band goes live.</small>
+          </span>
+          <input type="checkbox" id="setNotify" class="switch" />
+        </label>
+        <div class="settings-divider"></div>
+        <label class="toggle-row" for="setLead" style="cursor:default">
+          <span>Lead time</span>
+          <select id="setLead" class="lead-select">
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="15">15 min</option>
+            <option value="20">20 min</option>
+            <option value="25">25 min</option>
+            <option value="30">30 min</option>
+            <option value="35">35 min</option>
+            <option value="40">40 min</option>
+            <option value="45">45 min</option>
+            <option value="50">50 min</option>
+          </select>
+        </label>
+        <p class="settings-note small">Reminders fire while the app is open. On iOS, add the app to your Home Screen and allow notifications when asked.</p>
       </div>
 
       <!-- Rollback configuration -->
@@ -1100,27 +1162,32 @@
   const LS_ENDED = "ba_ended_v1";
   const LS_SETTINGS = "ba_settings_v1";
   const LS_ROLLBACK = "ba_rollback_v1";
+  const LS_NOTIFIED = "ba_notified_v1";
+
+  // Festival date range (YYYY-MM-DD). Used to default/limit the date picker.
+  const FESTIVAL = { start: "2026-08-04", end: "2026-08-08" };
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   // ---- Default example data (used on first run / reset) -----------
   function defaultSchedule() {
     return {
       "SEA SHEPHERD": [
-        { id: uid(), name: "MESHUGGAH", time: "21:30", end: "22:45", notes: "Headliner — get there early" },
-        { id: uid(), name: "GOJIRA", time: "19:45", end: "20:55", notes: "" },
-        { id: uid(), name: "AT THE GATES", time: "18:00", end: "18:50", notes: "Melodic death classics" }
+        { id: uid(), name: "MESHUGGAH", date: "2026-08-06", time: "21:30", end: "22:45", notes: "Headliner — get there early" },
+        { id: uid(), name: "GOJIRA", date: "2026-08-05", time: "19:45", end: "20:55", notes: "" },
+        { id: uid(), name: "AT THE GATES", date: "2026-08-04", time: "18:00", end: "18:50", notes: "Melodic death classics" }
       ],
       "MARSHALL": [
-        { id: uid(), name: "BEHEMOTH", time: "22:00", end: "23:15", notes: "Full stage show" },
-        { id: uid(), name: "CARCASS", time: "20:15", end: "21:15", notes: "" },
-        { id: uid(), name: "OBITUARY", time: "18:30", end: "19:25", notes: "" }
+        { id: uid(), name: "BEHEMOTH", date: "2026-08-07", time: "22:00", end: "23:15", notes: "Full stage show" },
+        { id: uid(), name: "CARCASS", date: "2026-08-06", time: "20:15", end: "21:15", notes: "" },
+        { id: uid(), name: "OBITUARY", date: "2026-08-05", time: "18:30", end: "19:25", notes: "" }
       ],
       "OBSCURE": [
-        { id: uid(), name: "ULCERATE", time: "17:00", end: "17:50", notes: "Atmospheric tech death" },
-        { id: uid(), name: "FULL OF HELL", time: "15:30", end: "16:15", notes: "" }
+        { id: uid(), name: "ULCERATE", date: "2026-08-04", time: "17:00", end: "17:50", notes: "Atmospheric tech death" },
+        { id: uid(), name: "FULL OF HELL", date: "2026-08-08", time: "15:30", end: "16:15", notes: "" }
       ],
       "OCTAGON": [
-        { id: uid(), name: "IMPERIAL TRIUMPHANT", time: "16:00", end: "16:50", notes: "Avant-garde, masks" },
-        { id: uid(), name: "BLOOD INCANTATION", time: "14:00", end: "14:50", notes: "Cosmic death metal" }
+        { id: uid(), name: "IMPERIAL TRIUMPHANT", date: "2026-08-07", time: "16:00", end: "16:50", notes: "Avant-garde, masks" },
+        { id: uid(), name: "BLOOD INCANTATION", date: "2026-08-08", time: "14:00", end: "14:50", notes: "Cosmic death metal" }
       ]
     };
   }
@@ -1142,7 +1209,8 @@
   let currentStageIndex = 0;
   let panelMode = "all";   // "all" | "picks"
 
-  const DEFAULT_SETTINGS = { showReset: true };
+  const DEFAULT_SETTINGS = { showReset: true, notifications: false, notifyLead: 25 };
+  let notified = new Set();   // keys of shows we've already reminded about
 
   /* =================================================================
      PERSISTENCE — resilient to empty / corrupted localStorage.
@@ -1172,6 +1240,7 @@
         .map(b => ({
           id: typeof b.id === "string" && b.id ? b.id : uid(),
           name: typeof b.name === "string" ? b.name : "",
+          date: typeof b.date === "string" ? b.date : "",
           time: typeof b.time === "string" ? b.time : "",
           end: typeof b.end === "string" ? b.end : "",
           notes: typeof b.notes === "string" ? b.notes : ""
@@ -1214,6 +1283,18 @@
   function saveEnded() {
     try { localStorage.setItem(LS_ENDED, JSON.stringify(ended)); }
     catch (e) { console.warn("Could not save ended shows.", e); }
+  }
+
+  function loadNotified() {
+    try {
+      const raw = localStorage.getItem(LS_NOTIFIED);
+      const arr = raw ? JSON.parse(raw) : [];
+      notified = new Set(Array.isArray(arr) ? arr : []);
+    } catch (e) { notified = new Set(); }
+  }
+  function saveNotified() {
+    try { localStorage.setItem(LS_NOTIFIED, JSON.stringify([...notified])); }
+    catch (e) { /* ignore */ }
   }
 
   function loadSettings() {
@@ -1271,12 +1352,11 @@
   /* =================================================================
      HELPERS
      ================================================================= */
-  // Sort bands ascending by time string ("HH:MM"). Blank times last.
+  // Sort bands ascending by full date+time. Undated/timeless entries last.
   function sortStage(stage) {
     schedule[stage].sort((a, b) => {
-      const ta = a.time || "99:99";
-      const tb = b.time || "99:99";
-      return ta.localeCompare(tb);
+      const sa = startMs(a), sb = startMs(b);
+      return (sa === null ? Infinity : sa) - (sb === null ? Infinity : sb);
     });
   }
 
@@ -1288,12 +1368,6 @@
     return null;
   }
 
-  // Minutes since midnight for the device's current local time.
-  function nowMinutes() {
-    const d = new Date();
-    return d.getHours() * 60 + d.getMinutes();
-  }
-
   // Parse "HH:MM" into minutes since midnight, or null if invalid.
   function timeToMinutes(t) {
     const m = /^(\d{1,2}):(\d{2})$/.exec((t || "").trim());
@@ -1303,70 +1377,98 @@
     return h * 60 + mn;
   }
 
-  // Human-friendly gaps, e.g. "in 2h 5m", "in 45m", "12m ago", "now".
+  // Human-friendly gaps, e.g. "in 2d 3h", "in 45m", "12m ago", "now".
   function fmtGap(mins, suffix, prefix) {
     if (mins <= 0) return "now";
-    const h = Math.floor(mins / 60), mn = mins % 60;
-    let s = "";
-    if (h && mn) s = `${h}h ${mn}m`;
-    else if (h) s = `${h}h`;
+    const d = Math.floor(mins / 1440);
+    const h = Math.floor((mins % 1440) / 60);
+    const mn = mins % 60;
+    let s;
+    if (d) s = h ? `${d}d ${h}h` : `${d}d`;
+    else if (h) s = mn ? `${h}h ${mn}m` : `${h}h`;
     else s = `${mn}m`;
     return (prefix || "") + s + (suffix || "");
   }
 
-  /* The minute threshold after which a show counts as finished.
-     Uses the end time when present (adding a day if it crosses midnight),
-     otherwise assumes a ~90 minute set after the start time. */
-  function endRefMinutes(b) {
-    const tm = timeToMinutes(b.time);
-    if (tm === null) return null;
-    let em = timeToMinutes(b.end);
-    if (em === null) return tm + 90;
-    if (em <= tm) em += 1440;
-    return em;
+  // Today's local date as "YYYY-MM-DD".
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
 
-  /* Effective ended state, combining the device clock with manual overrides.
-     ended[id] === "ended" (or legacy true) -> forced ended.
-     ended[id] === "active"                 -> forced back to upcoming.
-     no override                            -> auto: ended once the clock
-                                               passes the show's end time. */
-  function isShowEnded(b) {
-    const ov = ended[b.id];
-    if (ov === "ended" || ov === true) return true;
-    if (ov === "active") return false;
-    const ref = endRefMinutes(b);
-    if (ref === null) return false;
-    return nowMinutes() >= ref;
+  // Friendly short date, e.g. "Aug 4". Empty string if unparseable.
+  function fmtDateShort(dateStr) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || "");
+    if (!m) return "";
+    return MONTHS[+m[2] - 1] + " " + (+m[3]);
   }
+
+  // Absolute epoch-ms for a date+time. Missing date falls back to today
+  // (keeps legacy time-only data behaving as before).
+  function dtMs(dateStr, timeStr) {
+    const t = timeToMinutes(timeStr);
+    if (t === null) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || todayStr());
+    if (!m) return null;
+    return new Date(+m[1], +m[2] - 1, +m[3], Math.floor(t / 60), t % 60, 0, 0).getTime();
+  }
+
+  function startMs(b) { return dtMs(b.date, b.time); }
+
+  // End instant. No end time -> assume a ~90 minute set; crossing midnight
+  // rolls the end to the next day.
+  function endMs(b) {
+    const s = startMs(b);
+    if (s === null) return null;
+    let e = dtMs(b.date, b.end);
+    if (e === null) return s + 90 * 60000;
+    if (e <= s) e += 24 * 60 * 60000;
+    return e;
+  }
+
+  /* Classify a show as "active" (playing now), "upcoming", or "ended",
+     using the device date+time plus manual overrides:
+     ended[id] === "ended" (or legacy true) -> forced ended.
+     ended[id] === "active"                 -> forced out of ended.        */
+  function classify(b) {
+    const ov = ended[b.id];
+    if (ov === "ended" || ov === true) return "ended";
+    const s = startMs(b), e = endMs(b), now = Date.now();
+    if (s === null) return "upcoming";
+    if (ov === "active") return (e !== null && now >= s && now < e) ? "active" : "upcoming";
+    if (e !== null && now >= e) return "ended";
+    if (now >= s) return "active";
+    return "upcoming";
+  }
+
+  function isShowEnded(b) { return classify(b) === "ended"; }
 
   /* Find the show closest to the device clock.
      - "now"  : a show that started within the last 90 min (latest one).
      - "next" : the soonest upcoming show; wraps to the earliest show of
                 the day if everything today has already started. */
   function computeNextUp() {
-    const now = nowMinutes();
+    const now = Date.now();
     const list = [];
     STAGES.forEach(stage => schedule[stage].forEach(b => {
       if (isShowEnded(b)) return;              // skip finished shows
-      const tm = timeToMinutes(b.time);
-      if (tm === null) return;                 // skip undated entries
-      list.push({ band: b, stage, tm, em: endRefMinutes(b) });
+      const s = startMs(b);
+      if (s === null) return;                  // skip undated/timeless entries
+      list.push({ band: b, stage, s, e: endMs(b) });
     }));
     if (!list.length) return null;
 
     // ON NOW — every show currently within its [start, end) window.
-    const playing = list.filter(it => now >= it.tm && now < it.em);
+    const playing = list.filter(it => it.e !== null && now >= it.s && now < it.e);
     if (playing.length) return { mode: "now", group: playing };
 
-    // NEXT UP — soonest start at/after now, else wrap to earliest (tomorrow).
-    let nextTm = null;
-    list.forEach(it => { if (it.tm >= now && (nextTm === null || it.tm < nextTm)) nextTm = it.tm; });
-    let wrap = false;
-    if (nextTm === null) { list.forEach(it => { if (nextTm === null || it.tm < nextTm) nextTm = it.tm; }); wrap = true; }
-    const group = list.filter(it => it.tm === nextTm);
-    const diff = wrap ? (nextTm + 1440 - now) : (nextTm - now);
-    return { mode: "next", group, diff };
+    // NEXT UP — the soonest start strictly in the future.
+    let nextS = null;
+    list.forEach(it => { if (it.s >= now && (nextS === null || it.s < nextS)) nextS = it.s; });
+    if (nextS === null) return null;           // nothing left — hide banner
+    const group = list.filter(it => it.s === nextS);
+    const diffMin = Math.round((nextS - now) / 60000);
+    return { mode: "next", group, diffMin };
   }
 
   // Choose which band of an overlapping slot to feature: a starred one
@@ -1398,17 +1500,21 @@
     nextUpStage = primary.stage;
 
     const isStarred = !!picks[primary.band.id];
-    const now = nowMinutes();
-    const diff = info.mode === "now" ? (now - primary.tm) : info.diff;
+    const ds = fmtDateShort(primary.band.date);
+    const metaBits = [];
+    if (ds) metaBits.push(ds);
+    metaBits.push(primary.band.time || "--:--");
+    metaBits.push(primary.stage);
 
     el.hidden = false;
     el.classList.toggle("on-now", info.mode === "now");
     document.getElementById("nuLabel").textContent = info.mode === "now" ? "On Now" : "Next Up";
     document.getElementById("nuBand").innerHTML =
       (isStarred ? '<span class="nu-band-star">&#9733;</span>' : "") + esc(primary.band.name);
-    document.getElementById("nuMeta").textContent = (primary.band.time || "--:--") + "  \u00b7  " + primary.stage;
-    document.getElementById("nuCount").textContent =
-      info.mode === "now" ? fmtGap(diff, " ago") : fmtGap(diff, "", "in ");
+    document.getElementById("nuMeta").textContent = metaBits.join("  \u00b7  ");
+    document.getElementById("nuCount").textContent = info.mode === "now"
+      ? fmtGap(Math.round((Date.now() - primary.s) / 60000), " ago")
+      : fmtGap(info.diffMin, "", "in ");
 
     // "+N MORE" appears only when other bands share the same slot.
     const more = document.getElementById("nuMore");
@@ -1428,8 +1534,9 @@
     const sub = document.getElementById("slotSub");
     const listEl = document.getElementById("slotList");
 
-    const times = bannerGroup.map(g => g.band.time).filter(Boolean);
-    sub.textContent = times.length ? (times.sort()[0] + " — overlapping shows") : "Overlapping shows";
+    const first = bannerGroup[0].band;
+    const ds = fmtDateShort(first.date);
+    sub.textContent = (ds ? ds + " \u00b7 " : "") + (first.time || "") + " — same time slot";
 
     listEl.innerHTML = bannerGroup
       .slice()
@@ -1441,7 +1548,7 @@
             <div class="s-time">${esc(g.band.time || "--:--")}${g.band.end ? " &#8594; " + esc(g.band.end) : ""}</div>
             <div class="s-body">
               <div class="s-name">${esc(g.band.name)}</div>
-              <div class="s-stage">${esc(g.stage)}</div>
+              <div class="s-stage">${fmtDateShort(g.band.date) ? esc(fmtDateShort(g.band.date)) + " &middot; " : ""}${esc(g.stage)}</div>
             </div>
             <span class="s-star ${starred ? "on" : ""}">${starred ? "&#9733;" : "&#9734;"}</span>
           </div>`;
@@ -1468,9 +1575,9 @@
      view doesn't jump while browsing. Otherwise just refresh the banner. */
   let lastEndedSig = "";
   function autoEndedSignature() {
-    const ids = [];
-    STAGES.forEach(s => schedule[s].forEach(b => { if (isShowEnded(b)) ids.push(b.id); }));
-    return ids.sort().join(",");
+    const parts = [];
+    STAGES.forEach(s => schedule[s].forEach(b => parts.push(b.id + ":" + classify(b))));
+    return parts.join(",");
   }
   function syncAutoEnded() {
     const sig = autoEndedSignature();
@@ -1484,6 +1591,7 @@
     } else {
       updateNextUp();
     }
+    checkReminders();
   }
 
   // Scroll a band's row into view and briefly highlight it.
@@ -1543,41 +1651,42 @@
       const bands = schedule[stage];
       const badgeLabel = type === "main" ? "MAIN STAGE" : "SECONDARY STAGE";
 
-      // Split into upcoming (active) and ended shows. Both stay time-sorted.
-      // Ended state is auto-derived from the clock + any manual override.
-      const active = bands.filter(b => !isShowEnded(b));
-      const finished = bands.filter(b => isShowEnded(b));
+      // Group by live status, derived from the device date+time + overrides.
+      const active = bands.filter(b => classify(b) === "active");
+      const upcoming = bands.filter(b => classify(b) === "upcoming");
+      const finished = bands.filter(b => classify(b) === "ended");
 
-      let rows = "";
+      const secHead = (cls, label, n) =>
+        `<div class="sec-head sec-${cls}"><span class="sec-line"></span><span class="sec-title">${label} (${n})</span><span class="sec-line"></span></div>`;
+      const timeline = (arr) => `<div class="timeline">${arr.map(b => bandRow(b)).join("")}</div>`;
+
+      let body = "";
       if (bands.length === 0) {
-        rows = `<div class="empty"><span class="skull">&#128128;</span>No bands yet on this stage.<br/>Tap + to add one.</div>`;
-      } else if (active.length === 0) {
-        rows = `<div class="empty"><span class="skull">&#9989;</span>All shows on this stage have ended.</div>`;
+        body = `<div class="empty"><span class="skull">&#128128;</span>No bands yet on this stage.<br/>Tap + to add one.</div>`;
       } else {
-        rows = active.map(b => bandRow(b)).join("");
-      }
-
-      // "ENDED SHOWS" section only appears once something is checked off.
-      let endedBlock = "";
-      if (finished.length > 0) {
-        endedBlock = `
-          <div class="ended-head">
-            <span class="ended-line"></span>
-            <span class="ended-title">&#9989; Ended Shows (${finished.length})</span>
-            <span class="ended-line"></span>
-          </div>
-          <div class="timeline ended-list">${finished.map(b => bandRow(b)).join("")}</div>
-        `;
+        // ACTIVE NOW (only when something is playing)
+        if (active.length) {
+          body += secHead("active", "&#9654; Active Now", active.length) + timeline(active);
+        }
+        // UPCOMING (always shown so the section is clear)
+        body += secHead("upcoming", "Upcoming Shows", upcoming.length);
+        body += upcoming.length
+          ? timeline(upcoming)
+          : `<div class="empty small">No upcoming shows.</div>`;
+        // ENDED (bottom, only when there are finished shows)
+        if (finished.length) {
+          body += secHead("ended", "&#9989; Ended Shows", finished.length)
+            + `<div class="timeline ended-list">${finished.map(b => bandRow(b)).join("")}</div>`;
+        }
       }
 
       section.innerHTML = `
         <div class="stage-head">
           <span class="badge ${type}">${badgeLabel}</span>
           <h2>${esc(stage)}</h2>
-          <div class="count">${active.length} upcoming &middot; ${finished.length} ended</div>
+          <div class="count">${active.length} active &middot; ${upcoming.length} upcoming &middot; ${finished.length} ended</div>
         </div>
-        <div class="timeline">${rows}</div>
-        ${endedBlock}
+        ${body}
       `;
       wrap.appendChild(section);
     });
@@ -1595,17 +1704,21 @@
 
   function bandRow(b) {
     const starred = !!picks[b.id];
-    const finished = isShowEnded(b);
+    const cls = classify(b);
+    const finished = cls === "ended";
     const time = b.time || "--:--";
-    const endLine = b.end
-      ? `<div class="endtime">&#8594; ends ${esc(b.end)}</div>`
-      : "";
+    // Small meta line: date + end time.
+    const metaParts = [];
+    const ds = fmtDateShort(b.date);
+    if (ds) metaParts.push(ds);
+    if (b.end) metaParts.push("&#8594; ends " + esc(b.end));
+    const metaLine = metaParts.length ? `<div class="endtime">${metaParts.join("  &middot;  ")}</div>` : "";
     return `
-      <div class="band ${starred ? "starred" : ""} ${finished ? "ended" : ""}">
-        <div class="time">${esc(time)}<small>Start</small></div>
+      <div class="band ${starred ? "starred" : ""} ${finished ? "ended" : ""} ${cls === "active" ? "live" : ""}">
+        <div class="time">${esc(time)}<small>${cls === "active" ? "Live" : "Start"}</small></div>
         <div class="body">
           <div class="name">${esc(b.name)}</div>
-          ${endLine}
+          ${metaLine}
           ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
         </div>
         <div class="actions">
@@ -1671,6 +1784,7 @@
       document.getElementById("sheetTitle").textContent = "Edit Band";
       document.getElementById("bandId").value = found.band.id;
       document.getElementById("iName").value = found.band.name;
+      document.getElementById("iDate").value = found.band.date || defaultFormDate();
       document.getElementById("iTime").value = found.band.time;
       document.getElementById("iEnd").value = found.band.end || "";
       document.getElementById("iNotes").value = found.band.notes;
@@ -1680,6 +1794,7 @@
       document.getElementById("sheetTitle").textContent = "Add Band";
       form.reset();
       document.getElementById("bandId").value = "";
+      document.getElementById("iDate").value = defaultFormDate();
       fillStageSelect(STAGES[currentStageIndex]);
       document.getElementById("deleteRow").classList.add("hidden");
     }
@@ -1691,7 +1806,14 @@
   }
 
   function clearErrors() {
-    ["f-name", "f-time", "f-end"].forEach(id => document.getElementById(id).classList.remove("invalid"));
+    ["f-name", "f-date", "f-time", "f-end"].forEach(id => document.getElementById(id).classList.remove("invalid"));
+  }
+
+  // Sensible default date for the form: today if it falls inside the
+  // festival window, otherwise the festival's first day.
+  function defaultFormDate() {
+    const t = todayStr();
+    return (t >= FESTIVAL.start && t <= FESTIVAL.end) ? t : FESTIVAL.start;
   }
 
   function submitForm(e) {
@@ -1700,18 +1822,21 @@
 
     const id = document.getElementById("bandId").value;
     const name = document.getElementById("iName").value.trim();
+    const date = document.getElementById("iDate").value.trim();
     const time = document.getElementById("iTime").value.trim();
     const end = document.getElementById("iEnd").value.trim();
     const notes = document.getElementById("iNotes").value.trim();
     const stage = document.getElementById("iStage").value;
 
-    // Validation: name + time required; end (if set) must be after start.
+    // Validation: name + date + time required; end (if set) after start.
     let ok = true;
     if (!name) { document.getElementById("f-name").classList.add("invalid"); ok = false; }
+    if (!date) { document.getElementById("f-date").classList.add("invalid"); ok = false; }
     if (!time) { document.getElementById("f-time").classList.add("invalid"); ok = false; }
     if (ok && end) {
       const s = timeToMinutes(time), e = timeToMinutes(end);
-      if (s !== null && e !== null && e <= s) {
+      // Only block when same-day end is before/equal start (midnight crossover allowed).
+      if (s !== null && e !== null && e <= s && e > 0 && (s - e) < 720) {
         document.getElementById("f-end").classList.add("invalid"); ok = false;
       }
     }
@@ -1721,7 +1846,7 @@
       // EDIT — possibly move between stages.
       const found = findBand(id);
       if (found) {
-        const updated = { id, name, time, end, notes };
+        const updated = { id, name, date, time, end, notes };
         if (found.stage !== stage) {
           schedule[found.stage].splice(found.idx, 1); // remove from old stage
           schedule[stage].push(updated);              // add to new stage
@@ -1732,7 +1857,7 @@
       toast("Band updated");
     } else {
       // ADD
-      schedule[stage].push({ id: uid(), name, time, end, notes });
+      schedule[stage].push({ id: uid(), name, date, time, end, notes });
       toast("Band added");
     }
 
@@ -1812,11 +1937,14 @@
     if (panel.classList.contains("open")) renderResults();
   }
 
-  // Build a flat, time-sorted list of all bands for search / picks.
+  // Build a flat, date+time-sorted list of all bands for search / picks.
   function allBandsFlat() {
     const list = [];
     STAGES.forEach(stage => schedule[stage].forEach(b => list.push({ ...b, stage })));
-    list.sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+    list.sort((a, b) => {
+      const sa = startMs(a), sb = startMs(b);
+      return (sa === null ? Infinity : sa) - (sb === null ? Infinity : sb);
+    });
     return list;
   }
 
@@ -1846,7 +1974,7 @@
           <div class="r-time">${esc(b.time || "--:--")}</div>
           <div class="r-body">
             <div class="r-name">${esc(b.name)}</div>
-            <div class="r-stage">${esc(b.stage)} &middot; ${STAGE_TYPE[b.stage] === "main" ? "Main" : "Secondary"}</div>
+            <div class="r-stage">${fmtDateShort(b.date) ? esc(fmtDateShort(b.date)) + " &middot; " : ""}${esc(b.stage)} &middot; ${STAGE_TYPE[b.stage] === "main" ? "Main" : "Secondary"}</div>
           </div>
           <button class="r-star ${starred ? "on" : ""}" data-pickstar="${b.id}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
         </div>`;
@@ -1946,6 +2074,9 @@
 
   function renderSettings() {
     document.getElementById("setShowReset").checked = !!settings.showReset;
+    document.getElementById("setNotify").checked =
+      !!settings.notifications && ("Notification" in window) && Notification.permission === "granted";
+    document.getElementById("setLead").value = String(settings.notifyLead || 25);
     const status = document.getElementById("rollbackStatus");
     if (rollback) {
       const n = STAGES.reduce((c, s) => c + (rollback.schedule[s] ? rollback.schedule[s].length : 0), 0);
@@ -2004,6 +2135,101 @@
     settings.showReset = e.target.checked;
     saveSettings();
     applySettings();
+  }
+
+  /* =================================================================
+     NOTIFICATIONS — local reminders before a show goes ACTIVE.
+     Best-effort: real background push needs a server, which a static
+     single-file app can't provide. These fire while the app is open
+     (foreground or recently backgrounded). On iOS the app must be
+     installed to the Home Screen (iOS 16.4+) and permission granted
+     from a tap for the service-worker notification path to work.
+     ================================================================= */
+  function notifyKey(b) {
+    return b.id + "@" + (b.date || "") + "T" + (b.time || "") + "+" + (settings.notifyLead || 25);
+  }
+
+  // Ask for permission (must run from a user gesture, important on iOS).
+  async function enableNotifications() {
+    if (!("Notification" in window)) {
+      showAlert("Not supported", "This browser does not support notifications.");
+      return false;
+    }
+    let perm = Notification.permission;
+    if (perm === "default") {
+      try { perm = await Notification.requestPermission(); }
+      catch (e) { perm = Notification.permission; }
+    }
+    if (perm !== "granted") {
+      showAlert("Reminders blocked",
+        "Notifications are blocked. Enable them for this app in your browser/OS settings, then try again. On iOS, add the app to your Home Screen first.");
+      return false;
+    }
+    return true;
+  }
+
+  // Show one reminder via the service worker (preferred) or the page.
+  function fireNotification(b, stage) {
+    const ds = fmtDateShort(b.date);
+    const title = "\uD83E\uDD18 " + b.name + " starts soon";
+    const body = [ds, b.time, stage].filter(Boolean).join("  \u00b7  ")
+      + "  (in " + (settings.notifyLead || 25) + " min)";
+    const opts = { body, tag: "ba-" + b.id, icon: "./icon-192.png", badge: "./icon-192.png", renotify: false };
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready
+          .then(reg => reg.showNotification(title, opts))
+          .catch(() => { try { new Notification(title, opts); } catch (e) {} });
+      } else {
+        new Notification(title, opts);
+      }
+    } catch (e) { console.warn("Notification failed", e); }
+  }
+
+  // Poll-based scheduler: fire when we're within the lead window before
+  // a show starts (and haven't already notified for it).
+  function checkReminders() {
+    if (!settings.notifications) return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const now = Date.now();
+    const lead = (settings.notifyLead || 25) * 60000;
+    let changed = false;
+    STAGES.forEach(stage => schedule[stage].forEach(b => {
+      const s = startMs(b);
+      if (s === null) return;
+      if (classify(b) === "ended") return;
+      const key = notifyKey(b);
+      if (notified.has(key)) return;
+      if (now >= s - lead && now < s) {
+        fireNotification(b, stage);
+        notified.add(key);
+        changed = true;
+      }
+    }));
+    if (changed) saveNotified();
+  }
+
+  async function toggleNotifications(e) {
+    if (e.target.checked) {
+      const ok = await enableNotifications();
+      settings.notifications = ok;
+      e.target.checked = ok;
+      if (ok) toast("Reminders on (" + (settings.notifyLead || 25) + " min before)");
+    } else {
+      settings.notifications = false;
+      toast("Reminders off");
+    }
+    saveSettings();
+    checkReminders();
+  }
+
+  function changeNotifyLead(e) {
+    settings.notifyLead = parseInt(e.target.value, 10) || 25;
+    saveSettings();
+    notified.clear();           // re-evaluate against the new lead time
+    saveNotified();
+    if (settings.notifications) toast("Reminder lead: " + settings.notifyLead + " min");
+    checkReminders();
   }
 
   /* =================================================================
@@ -2096,6 +2322,7 @@
     loadEnded();
     loadSettings();
     loadRollback();
+    loadNotified();
     renderTabs();
     renderStages();
     applySettings();
@@ -2104,6 +2331,7 @@
     // Keep the banner + auto-ended shows in sync with the device clock.
     lastEndedSig = autoEndedSignature();
     updateNextUp();
+    checkReminders();
     setInterval(syncAutoEnded, 20000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) syncAutoEnded(); });
 
@@ -2149,6 +2377,8 @@
     document.getElementById("settingsClose").addEventListener("click", closeSettings);
     settingsOverlay.addEventListener("click", (e) => { if (e.target === settingsOverlay) closeSettings(); });
     document.getElementById("setShowReset").addEventListener("change", toggleShowReset);
+    document.getElementById("setNotify").addEventListener("change", toggleNotifications);
+    document.getElementById("setLead").addEventListener("change", changeNotifyLead);
     document.getElementById("saveRollbackBtn").addEventListener("click", saveRollback);
     document.getElementById("clearRollbackBtn").addEventListener("click", clearRollback);
     document.getElementById("doResetBtn").addEventListener("click", resetData);
