@@ -23,11 +23,11 @@ All application logic lives in a single `index.html` (vanilla HTML/CSS/JS, no fr
 - 4 swipeable stage screens with CSS scroll-snap: **SEA SHEPHERD**, **MARSHALL** (main), **OBSCURE**, **OCTAGON** (secondary).
 - **Date + time per show.** Each stage is split into **ACTIVE NOW / UPCOMING / ENDED** sections, derived live from the device's date and clock.
 - Live **Next Up / On Now** banner with countdown (across days); overlapping slots show the starred band first with a **+N MORE** popup.
-- **Reminders / notifications** before a show goes live, with a configurable lead time (5–50 min). Best-effort on iOS installed PWAs (add to Home Screen + allow notifications).
+- **Add the whole schedule to your calendar** (`.ics` export) so your phone's calendar app sends the notifications, with a configurable reminder lead time (5–50 min). Re-add the file after edits to update events (stable per-band UID + incrementing SEQUENCE).
 - Sticky top nav + hamburger menu (My Picks, Search, Settings, Reset).
 - Add / edit / delete bands via a bottom-sheet form (name + date + start time required); bands auto-sort by date+time.
 - Mark shows as ended (✓) manually — overrides the automatic clock-based status.
 - Search across all stages and a starred **My Picks** view.
-- Settings: hide the reset button, configure reminders, switch layout (swipe vs stacked), export/import the schedule as JSON, and define a custom rollback point.
+- Settings: hide the reset button, add the schedule to your calendar (.ics), switch layout (swipe vs stacked), export/import the schedule as JSON, and define a custom rollback point.
 - Multi-step custom confirmation dialogs (no native `alert`/`confirm`).
 - All data saved instantly to `localStorage`; resilient to empty/corrupt storage.

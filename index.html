@@ -1077,19 +1077,14 @@
         </label>
       </div>
 
-      <!-- Notifications -->
+      <!-- Calendar -->
       <div class="settings-group">
-        <div class="settings-label">Reminders</div>
-        <label class="toggle-row" for="setNotify">
-          <span>
-            Notify before a show
-            <small>Get a heads-up before a band goes live.</small>
-          </span>
-          <input type="checkbox" id="setNotify" class="switch" />
-        </label>
-        <div class="settings-divider"></div>
+        <div class="settings-label">Calendar</div>
         <label class="toggle-row" for="setLead" style="cursor:default">
-          <span>Lead time</span>
+          <span>
+            Reminder before show
+            <small>Alarm added to each calendar event.</small>
+          </span>
           <select id="setLead" class="lead-select">
             <option value="5">5 min</option>
             <option value="10">10 min</option>
@@ -1103,7 +1098,9 @@
             <option value="50">50 min</option>
           </select>
         </label>
-        <p class="settings-note small">Reminders fire while the app is open. On iOS, add the app to your Home Screen and allow notifications when asked.</p>
+        <div class="settings-divider"></div>
+        <button type="button" class="btn btn-primary" id="calBtn">&#128197; Add entire schedule to calendar</button>
+        <p class="settings-note small">Downloads a calendar file (.ics) with every band; your phone's calendar then sends the reminders. After editing a band, add the file again to update events (live auto-sync would require a hosted calendar subscription).</p>
       </div>
 
       <!-- Layout + data import/export -->
@@ -1200,7 +1197,7 @@
   const LS_ENDED = "ba_ended_v1";
   const LS_SETTINGS = "ba_settings_v1";
   const LS_ROLLBACK = "ba_rollback_v1";
-  const LS_NOTIFIED = "ba_notified_v1";
+  const LS_ICSSEQ = "ba_icsseq_v1";
 
   // Festival date range (YYYY-MM-DD). Used to default/limit the date picker.
   const FESTIVAL = { start: "2026-08-04", end: "2026-08-08" };
@@ -1247,8 +1244,7 @@
   let currentStageIndex = 0;
   let panelMode = "all";   // "all" | "picks"
 
-  const DEFAULT_SETTINGS = { showReset: true, notifications: false, notifyLead: 25, layout: "swipe" };
-  let notified = new Set();   // keys of shows we've already reminded about
+  const DEFAULT_SETTINGS = { showReset: true, notifyLead: 25, layout: "swipe" };
 
   /* =================================================================
      PERSISTENCE — resilient to empty / corrupted localStorage.
@@ -1323,17 +1319,6 @@
     catch (e) { console.warn("Could not save ended shows.", e); }
   }
 
-  function loadNotified() {
-    try {
-      const raw = localStorage.getItem(LS_NOTIFIED);
-      const arr = raw ? JSON.parse(raw) : [];
-      notified = new Set(Array.isArray(arr) ? arr : []);
-    } catch (e) { notified = new Set(); }
-  }
-  function saveNotified() {
-    try { localStorage.setItem(LS_NOTIFIED, JSON.stringify([...notified])); }
-    catch (e) { /* ignore */ }
-  }
 
   function loadSettings() {
     let data = null;
@@ -1627,7 +1612,6 @@
     } else {
       updateNextUp();
     }
-    checkReminders();
   }
 
   // Scroll a band's row into view and briefly highlight it.
@@ -2213,8 +2197,6 @@
 
   function renderSettings() {
     document.getElementById("setShowReset").checked = !!settings.showReset;
-    document.getElementById("setNotify").checked =
-      !!settings.notifications && ("Notification" in window) && Notification.permission === "granted";
     document.getElementById("setLead").value = String(settings.notifyLead || 25);
     document.getElementById("setLayout").value = settings.layout === "stack" ? "stack" : "swipe";
     const status = document.getElementById("rollbackStatus");
@@ -2278,98 +2260,112 @@
   }
 
   /* =================================================================
-     NOTIFICATIONS — local reminders before a show goes ACTIVE.
-     Best-effort: real background push needs a server, which a static
-     single-file app can't provide. These fire while the app is open
-     (foreground or recently backgrounded). On iOS the app must be
-     installed to the Home Screen (iOS 16.4+) and permission granted
-     from a tap for the service-worker notification path to work.
+     CALENDAR EXPORT (.ics) — the phone's calendar app then handles
+     the actual notifications. Each event carries a stable UID (so a
+     re-import updates rather than duplicates, where supported) and an
+     incrementing SEQUENCE. A VALARM adds a reminder before the show.
+
+     Note: true live auto-sync (edit here -> auto-update in the calendar)
+     is not possible for a static, offline, single-file app — that needs
+     a hosted, per-user ICS subscription served from a backend.
      ================================================================= */
-  function notifyKey(b) {
-    return b.id + "@" + (b.date || "") + "T" + (b.time || "") + "+" + (settings.notifyLead || 25);
-  }
-
-  // Ask for permission (must run from a user gesture, important on iOS).
-  async function enableNotifications() {
-    if (!("Notification" in window)) {
-      showAlert("Not supported", "This browser does not support notifications.");
-      return false;
-    }
-    let perm = Notification.permission;
-    if (perm === "default") {
-      try { perm = await Notification.requestPermission(); }
-      catch (e) { perm = Notification.permission; }
-    }
-    if (perm !== "granted") {
-      showAlert("Reminders blocked",
-        "Notifications are blocked. Enable them for this app in your browser/OS settings, then try again. On iOS, add the app to your Home Screen first.");
-      return false;
-    }
-    return true;
-  }
-
-  // Show one reminder via the service worker (preferred) or the page.
-  function fireNotification(b, stage) {
-    const ds = fmtDateShort(b.date);
-    const title = "\uD83E\uDD18 " + b.name + " starts soon";
-    const body = [ds, b.time, stage].filter(Boolean).join("  \u00b7  ")
-      + "  (in " + (settings.notifyLead || 25) + " min)";
-    const opts = { body, tag: "ba-" + b.id, icon: "./icon-192.png", badge: "./icon-192.png", renotify: false };
-    try {
-      if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-        navigator.serviceWorker.ready
-          .then(reg => reg.showNotification(title, opts))
-          .catch(() => { try { new Notification(title, opts); } catch (e) {} });
-      } else {
-        new Notification(title, opts);
-      }
-    } catch (e) { console.warn("Notification failed", e); }
-  }
-
-  // Poll-based scheduler: fire when we're within the lead window before
-  // a show starts (and haven't already notified for it).
-  function checkReminders() {
-    if (!settings.notifications) return;
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
-    const now = Date.now();
-    const lead = (settings.notifyLead || 25) * 60000;
-    let changed = false;
-    STAGES.forEach(stage => schedule[stage].forEach(b => {
-      const s = startMs(b);
-      if (s === null) return;
-      if (classify(b) === "ended") return;
-      const key = notifyKey(b);
-      if (notified.has(key)) return;
-      if (now >= s - lead && now < s) {
-        fireNotification(b, stage);
-        notified.add(key);
-        changed = true;
-      }
-    }));
-    if (changed) saveNotified();
-  }
-
-  async function toggleNotifications(e) {
-    if (e.target.checked) {
-      const ok = await enableNotifications();
-      settings.notifications = ok;
-      e.target.checked = ok;
-      if (ok) toast("Reminders on (" + (settings.notifyLead || 25) + " min before)");
-    } else {
-      settings.notifications = false;
-      toast("Reminders off");
-    }
-    saveSettings();
-    checkReminders();
-  }
-
   function changeNotifyLead(e) {
     settings.notifyLead = parseInt(e.target.value, 10) || 25;
     saveSettings();
-    notified.clear();           // re-evaluate against the new lead time
-    saveNotified();
-    if (settings.notifications) toast("Reminder lead: " + settings.notifyLead + " min");
-    checkReminders();
+    toast("Calendar reminder: " + settings.notifyLead + " min before");
+  }
+
+  // Pad to 2 digits.
+  function p2(n) { return String(n).padStart(2, "0"); }
+
+  // Floating local timestamp "YYYYMMDDTHHMMSS" from epoch ms.
+  function icsLocal(ms) {
+    const d = new Date(ms);
+    return d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) +
+      "T" + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds());
+  }
+  // UTC stamp "YYYYMMDDTHHMMSSZ".
+  function icsUTC(ms) {
+    const d = new Date(ms);
+    return d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCDate()) +
+      "T" + p2(d.getUTCHours()) + p2(d.getUTCMinutes()) + p2(d.getUTCSeconds()) + "Z";
+  }
+  // Escape text for iCalendar fields.
+  function icsEsc(s) {
+    return String(s || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+  }
+  // Fold long lines to 75 octets per RFC 5545 (simple char-based fold).
+  function icsFold(line) {
+    if (line.length <= 75) return line;
+    let out = line.slice(0, 75);
+    let rest = line.slice(75);
+    while (rest.length > 74) { out += "\r\n " + rest.slice(0, 74); rest = rest.slice(74); }
+    out += "\r\n " + rest;
+    return out;
+  }
+
+  function nextIcsSequence() {
+    let seq = 0;
+    try { seq = parseInt(localStorage.getItem(LS_ICSSEQ) || "0", 10) || 0; } catch (e) {}
+    seq += 1;
+    try { localStorage.setItem(LS_ICSSEQ, String(seq)); } catch (e) {}
+    return seq;
+  }
+
+  function buildICS() {
+    const lead = settings.notifyLead || 25;
+    const seq = nextIcsSequence();
+    const stamp = icsUTC(Date.now());
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Brutal Assault//Schedule//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      "X-WR-CALNAME:Brutal Assault"
+    ];
+    STAGES.forEach(stage => schedule[stage].forEach(b => {
+      const s = startMs(b);
+      if (s === null) return;                 // need a valid date+time
+      const e = endMs(b) || (s + 60 * 60000); // default 1h if no end
+      lines.push("BEGIN:VEVENT");
+      lines.push("UID:" + icsEsc(b.id) + "@brutal-assault");
+      lines.push("SEQUENCE:" + seq);
+      lines.push("DTSTAMP:" + stamp);
+      lines.push("DTSTART:" + icsLocal(s));
+      lines.push("DTEND:" + icsLocal(e));
+      lines.push(icsFold("SUMMARY:" + icsEsc(b.name + "  —  " + stage)));
+      lines.push(icsFold("LOCATION:" + icsEsc(stage + " Stage, Brutal Assault")));
+      if (b.notes) lines.push(icsFold("DESCRIPTION:" + icsEsc(b.notes)));
+      lines.push("BEGIN:VALARM");
+      lines.push("ACTION:DISPLAY");
+      lines.push(icsFold("DESCRIPTION:" + icsEsc(b.name + " starts soon")));
+      lines.push("TRIGGER:-PT" + lead + "M");
+      lines.push("END:VALARM");
+      lines.push("END:VEVENT");
+    }));
+    lines.push("END:VCALENDAR");
+    return lines.map(icsFold).join("\r\n");
+  }
+
+  function exportCalendar() {
+    const count = STAGES.reduce((c, s) => c + schedule[s].filter(b => startMs(b) !== null).length, 0);
+    if (count === 0) { showAlert("Nothing to add", "There are no dated shows to add to your calendar yet."); return; }
+    try {
+      const blob = new Blob([buildICS()], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "brutal-assault-" + todayStr() + ".ics";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast(count + " shows sent to calendar");
+    } catch (err) {
+      console.warn("Calendar export failed", err);
+      showAlert("Export failed", "Could not generate the calendar file on this device.");
+    }
   }
 
   /* =================================================================
@@ -2462,7 +2458,6 @@
     loadEnded();
     loadSettings();
     loadRollback();
-    loadNotified();
     renderTabs();
     renderStages();
     applySettings();
@@ -2471,7 +2466,6 @@
     // Keep the banner + auto-ended shows in sync with the device clock.
     lastEndedSig = autoEndedSignature();
     updateNextUp();
-    checkReminders();
     setInterval(syncAutoEnded, 20000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) syncAutoEnded(); });
 
@@ -2517,8 +2511,8 @@
     document.getElementById("settingsClose").addEventListener("click", closeSettings);
     settingsOverlay.addEventListener("click", (e) => { if (e.target === settingsOverlay) closeSettings(); });
     document.getElementById("setShowReset").addEventListener("change", toggleShowReset);
-    document.getElementById("setNotify").addEventListener("change", toggleNotifications);
     document.getElementById("setLead").addEventListener("change", changeNotifyLead);
+    document.getElementById("calBtn").addEventListener("click", exportCalendar);
     document.getElementById("setLayout").addEventListener("change", changeLayout);
     document.getElementById("exportBtn").addEventListener("click", exportConfig);
     document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());

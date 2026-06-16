@@ -2,7 +2,7 @@
    App-shell precache + offline-first fetch handling.
    All app logic stays in index.html; this file only handles caching. */
 
-const CACHE = "brutal-assault-v6";
+const CACHE = "brutal-assault-v7";
 
 // Everything needed to run the app fully offline.
 const ASSETS = [
@@ -28,19 +28,6 @@ self.addEventListener("activate", (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
-  );
-});
-
-// Focus (or open) the app when a reminder notification is tapped.
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const c of clients) {
-        if ("focus" in c) return c.focus();
-      }
-      if (self.clients.openWindow) return self.clients.openWindow("./index.html");
-    })
   );
 });
 
