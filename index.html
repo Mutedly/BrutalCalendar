@@ -547,6 +547,54 @@
 
     .empty.small { padding: 18px 16px; font-size: 13px; }
 
+    /* Overlap warning badge inside a band card */
+    .overlap-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 6px;
+      background: rgba(217,164,65,0.16);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .overlap-badge:active { transform: scale(0.95); }
+    .band.has-overlap { border-left-color: var(--gold); }
+    .band.live.has-overlap { border-left-color: #22c55e; }
+
+    /* Per-stage sort control */
+    .sort-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 2px 12px;
+    }
+    .sort-label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      font-weight: 800;
+    }
+    .sort-select {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 14px;
+      font-family: var(--font);
+      font-weight: 700;
+    }
+    .sort-select:focus { outline: none; border-color: var(--accent); }
+
     /* Empty state */
     .empty {
       text-align: center;
@@ -905,6 +953,8 @@
     .slot-item .s-stage { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-dim); margin-top: 2px; }
     .slot-item .s-star { color: var(--ink-faint); font-size: 18px; }
     .slot-item .s-star.on { color: var(--star); }
+    .slot-item .s-warn { color: var(--gold); font-size: 18px; }
+    .slot-item .s-name .vs { color: var(--gold); font-weight: 900; }
 
     /* Toast */
     .toast {
@@ -1077,6 +1127,13 @@
         </label>
       </div>
 
+      <!-- Overlap check -->
+      <div class="settings-group">
+        <div class="settings-label">Schedule Check</div>
+        <p class="settings-note" id="overlapStatus"></p>
+        <button type="button" class="btn btn-ghost" id="overlapsBtn">&#9888; View overlapping shows</button>
+      </div>
+
       <!-- Calendar -->
       <div class="settings-group">
         <div class="settings-label">Calendar</div>
@@ -1198,6 +1255,7 @@
   const LS_SETTINGS = "ba_settings_v1";
   const LS_ROLLBACK = "ba_rollback_v1";
   const LS_ICSSEQ = "ba_icsseq_v1";
+  const LS_SORT = "ba_sort_v1";
 
   // Festival date range (YYYY-MM-DD). Used to default/limit the date picker.
   const FESTIVAL = { start: "2026-08-04", end: "2026-08-08" };
@@ -1241,6 +1299,8 @@
   let ended = {};          // { bandId: true } — shows that already happened
   let settings = {};       // { showReset: bool }
   let rollback = null;     // user-defined snapshot to roll back to (or null = built-in)
+  let sortModes = {};      // { stage: "time" | "abc" | "star" }
+  let overlapMap = {};     // { bandId: [ {band, stage}, ... ] } recomputed each render
   let currentStageIndex = 0;
   let panelMode = "all";   // "all" | "picks"
 
@@ -1333,6 +1393,23 @@
     catch (e) { console.warn("Could not save settings.", e); }
   }
 
+  function loadSortModes() {
+    let data = null;
+    try {
+      const raw = localStorage.getItem(LS_SORT);
+      if (raw) data = JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+    sortModes = {};
+    STAGES.forEach(s => {
+      const v = data && data[s];
+      sortModes[s] = (v === "abc" || v === "star") ? v : "time";
+    });
+  }
+  function saveSortModes() {
+    try { localStorage.setItem(LS_SORT, JSON.stringify(sortModes)); }
+    catch (e) { /* ignore */ }
+  }
+
   // The rollback snapshot stores a full state bundle the user chose to keep.
   function loadRollback() {
     try {
@@ -1381,6 +1458,69 @@
       const sa = startMs(a), sb = startMs(b);
       return (sa === null ? Infinity : sa) - (sb === null ? Infinity : sb);
     });
+  }
+
+  // Two shows overlap when their [start, end) intervals intersect
+  // (dates included, since startMs/endMs are absolute timestamps).
+  function bandsOverlap(a, b) {
+    const as = startMs(a), ae = endMs(a), bs = startMs(b), be = endMs(b);
+    if (as === null || ae === null || bs === null || be === null) return false;
+    return as < be && bs < ae;
+  }
+
+  // Build { bandId: [ {band, stage} ] } for every show that clashes with
+  // at least one other show (across all stages).
+  function computeOverlaps() {
+    const flat = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => {
+      const s = startMs(b), e = endMs(b);
+      if (s !== null && e !== null) flat.push({ band: b, stage, s, e });
+    }));
+    const map = {};
+    for (let i = 0; i < flat.length; i++) {
+      for (let j = i + 1; j < flat.length; j++) {
+        const A = flat[i], B = flat[j];
+        if (A.s < B.e && B.s < A.e) {
+          (map[A.band.id] || (map[A.band.id] = [])).push({ band: B.band, stage: B.stage });
+          (map[B.band.id] || (map[B.band.id] = [])).push({ band: A.band, stage: A.stage });
+        }
+      }
+    }
+    return map;
+  }
+
+  // Unique overlapping pairs, time-sorted — for the settings popup.
+  function overlapPairs() {
+    const flat = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => {
+      const s = startMs(b), e = endMs(b);
+      if (s !== null && e !== null) flat.push({ band: b, stage, s, e });
+    }));
+    flat.sort((a, b) => a.s - b.s);
+    const pairs = [];
+    for (let i = 0; i < flat.length; i++) {
+      for (let j = i + 1; j < flat.length; j++) {
+        if (flat[i].s < flat[j].e && flat[j].s < flat[i].e) pairs.push([flat[i], flat[j]]);
+      }
+    }
+    return pairs;
+  }
+
+  // Apply a stage's display sort mode to a list of bands (non-mutating).
+  function applySort(arr, mode) {
+    const copy = arr.slice();
+    if (mode === "abc") {
+      copy.sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
+    } else if (mode === "star") {
+      copy.sort((a, b) => {
+        const pa = picks[a.id] ? 0 : 1, pb = picks[b.id] ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return (startMs(a) === null ? Infinity : startMs(a)) - (startMs(b) === null ? Infinity : startMs(b));
+      });
+    } else {
+      copy.sort((a, b) => (startMs(a) === null ? Infinity : startMs(a)) - (startMs(b) === null ? Infinity : startMs(b)));
+    }
+    return copy;
   }
 
   function findBand(id) {
@@ -1551,31 +1691,26 @@
   }
 
   // Popup listing every band in the current banner slot.
-  function openSlotPopup() {
-    if (!bannerGroup.length) return;
+  // Shared popup renderer for a list of {band, stage} items. Tapping a
+  // row jumps to that band's stage and flashes it.
+  function renderListPopup(title, sub, items) {
     const overlay = document.getElementById("slotOverlay");
-    const sub = document.getElementById("slotSub");
+    document.getElementById("slotTitle").innerHTML = title;
+    document.getElementById("slotSub").textContent = sub || "";
     const listEl = document.getElementById("slotList");
 
-    const first = bannerGroup[0].band;
-    const ds = fmtDateShort(first.date);
-    sub.textContent = (ds ? ds + " \u00b7 " : "") + (first.time || "") + " — same time slot";
-
-    listEl.innerHTML = bannerGroup
-      .slice()
-      .sort((a, b) => a.stage.localeCompare(b.stage))
-      .map(g => {
-        const starred = !!picks[g.band.id];
-        return `
-          <div class="slot-item" data-slot="${g.band.id}">
-            <div class="s-time">${esc(g.band.time || "--:--")}${g.band.end ? " &#8594; " + esc(g.band.end) : ""}</div>
-            <div class="s-body">
-              <div class="s-name">${esc(g.band.name)}</div>
-              <div class="s-stage">${fmtDateShort(g.band.date) ? esc(fmtDateShort(g.band.date)) + " &middot; " : ""}${esc(g.stage)}</div>
-            </div>
-            <span class="s-star ${starred ? "on" : ""}">${starred ? "&#9733;" : "&#9734;"}</span>
-          </div>`;
-      }).join("");
+    listEl.innerHTML = items.map(g => {
+      const starred = !!picks[g.band.id];
+      return `
+        <div class="slot-item" data-slot="${g.band.id}">
+          <div class="s-time">${esc(g.band.time || "--:--")}${g.band.end ? " &#8594; " + esc(g.band.end) : ""}</div>
+          <div class="s-body">
+            <div class="s-name">${esc(g.band.name)}</div>
+            <div class="s-stage">${fmtDateShort(g.band.date) ? esc(fmtDateShort(g.band.date)) + " &middot; " : ""}${esc(g.stage)}</div>
+          </div>
+          <span class="s-star ${starred ? "on" : ""}">${starred ? "&#9733;" : "&#9734;"}</span>
+        </div>`;
+    }).join("");
 
     listEl.querySelectorAll("[data-slot]").forEach(el => el.addEventListener("click", () => {
       const id = el.getAttribute("data-slot");
@@ -1589,6 +1724,63 @@
 
     overlay.classList.add("open");
   }
+
+  function openSlotPopup() {
+    if (!bannerGroup.length) return;
+    const first = bannerGroup[0].band;
+    const ds = fmtDateShort(first.date);
+    const sub = (ds ? ds + " \u00b7 " : "") + (first.time || "") + " — same time slot";
+    const items = bannerGroup.slice().sort((a, b) => a.stage.localeCompare(b.stage));
+    renderListPopup("\uD83C\uDFA4 Same Time Slot", sub, items);
+  }
+
+  // From a band's "⚠ Overlap" badge: show everything it clashes with.
+  function openOverlapDetail(bandId) {
+    const target = findBand(bandId);
+    const clashes = overlapMap[bandId];
+    if (!target || !clashes || !clashes.length) return;
+    const b = target.band;
+    const ds = fmtDateShort(b.date);
+    const sub = esc(b.name) + " overlaps with " + clashes.length + " show" + (clashes.length === 1 ? "" : "s")
+      + (ds ? "  \u00b7  " + ds : "");
+    const items = clashes.slice().sort((x, y) =>
+      (startMs(x.band) === null ? Infinity : startMs(x.band)) - (startMs(y.band) === null ? Infinity : startMs(y.band)));
+    renderListPopup("\u26A0 Overlaps", sub, items);
+  }
+
+  // From Settings: every overlapping pair across the whole schedule.
+  function openOverlapsPopup() {
+    const pairs = overlapPairs();
+    const overlay = document.getElementById("slotOverlay");
+    document.getElementById("slotTitle").innerHTML = "\u26A0 Overlapping Shows";
+    const listEl = document.getElementById("slotList");
+    if (!pairs.length) {
+      document.getElementById("slotSub").textContent = "No time clashes — you're all set.";
+      listEl.innerHTML = `<div class="empty"><span class="skull">&#9989;</span>No overlapping shows.</div>`;
+      overlay.classList.add("open");
+      return;
+    }
+    document.getElementById("slotSub").textContent = pairs.length + " clash" + (pairs.length === 1 ? "" : "es") + " found";
+    listEl.innerHTML = pairs.map(([A, B]) => {
+      const ds = fmtDateShort(A.band.date);
+      return `
+        <div class="slot-item" data-slot="${A.band.id}">
+          <div class="s-body">
+            <div class="s-name">${esc(A.band.name)} <span class="vs">&#8644;</span> ${esc(B.band.name)}</div>
+            <div class="s-stage">${ds ? esc(ds) + " &middot; " : ""}${esc(A.band.time || "")}–${esc(A.band.end || "?")} ${esc(A.stage)} &nbsp;vs&nbsp; ${esc(B.band.time || "")}–${esc(B.band.end || "?")} ${esc(B.stage)}</div>
+          </div>
+          <span class="s-warn">&#9888;</span>
+        </div>`;
+    }).join("");
+    listEl.querySelectorAll("[data-slot]").forEach(el => el.addEventListener("click", () => {
+      const id = el.getAttribute("data-slot");
+      const found = findBand(id);
+      closeSlotPopup();
+      if (found) { closeSettings(); goToStage(STAGES.indexOf(found.stage)); flashBand(id); }
+    }));
+    overlay.classList.add("open");
+  }
+
   function closeSlotPopup() {
     document.getElementById("slotOverlay").classList.remove("open");
   }
@@ -1659,9 +1851,10 @@
   }
 
   function renderStages() {
+    overlapMap = computeOverlaps();      // refresh clash data for this render
     const wrap = document.getElementById("carousel");
     wrap.innerHTML = "";
-    STAGES.forEach(stage => {
+    STAGES.forEach((stage, sIndex) => {
       const type = STAGE_TYPE[stage];
       const section = document.createElement("section");
       section.className = "stage " + (type === "main" ? "main-stage" : "secondary-stage");
@@ -1670,11 +1863,12 @@
       sortStage(stage);
       const bands = schedule[stage];
       const badgeLabel = type === "main" ? "MAIN STAGE" : "SECONDARY STAGE";
+      const mode = sortModes[stage] || "time";
 
       // Group by live status, derived from the device date+time + overrides.
-      const active = bands.filter(b => classify(b) === "active");
-      const upcoming = bands.filter(b => classify(b) === "upcoming");
-      const finished = bands.filter(b => classify(b) === "ended");
+      const active = applySort(bands.filter(b => classify(b) === "active"), mode);
+      const upcoming = applySort(bands.filter(b => classify(b) === "upcoming"), mode);
+      const finished = applySort(bands.filter(b => classify(b) === "ended"), mode);
 
       const secHead = (cls, label, n) =>
         `<div class="sec-head sec-${cls}"><span class="sec-line"></span><span class="sec-title">${label} (${n})</span><span class="sec-line"></span></div>`;
@@ -1700,12 +1894,23 @@
         }
       }
 
+      const sortControl = `
+        <div class="sort-row">
+          <span class="sort-label">Sort</span>
+          <select class="sort-select" data-sortstage="${sIndex}" aria-label="Sort ${esc(stage)}">
+            <option value="time" ${mode === "time" ? "selected" : ""}>Start time</option>
+            <option value="abc" ${mode === "abc" ? "selected" : ""}>A–Z</option>
+            <option value="star" ${mode === "star" ? "selected" : ""}>&#9733; Starred first</option>
+          </select>
+        </div>`;
+
       section.innerHTML = `
         <div class="stage-head">
           <span class="badge ${type}">${badgeLabel}</span>
           <h2>${esc(stage)}</h2>
           <div class="count">${active.length} active &middot; ${upcoming.length} upcoming &middot; ${finished.length} ended</div>
         </div>
+        ${sortControl}
         ${body}
       `;
       wrap.appendChild(section);
@@ -1718,6 +1923,16 @@
       el.addEventListener("click", () => toggleStar(el.getAttribute("data-star"))));
     wrap.querySelectorAll("[data-end]").forEach(el =>
       el.addEventListener("click", () => toggleEnded(el.getAttribute("data-end"))));
+    wrap.querySelectorAll("[data-overlap]").forEach(el =>
+      el.addEventListener("click", () => openOverlapDetail(el.getAttribute("data-overlap"))));
+    wrap.querySelectorAll("[data-sortstage]").forEach(el =>
+      el.addEventListener("change", () => {
+        sortModes[STAGES[+el.getAttribute("data-sortstage")]] = el.value;
+        saveSortModes();
+        const idx = currentStageIndex;
+        renderStages();
+        scrollToStage(idx, false);
+      }));
 
     updateNextUp();
   }
@@ -1733,12 +1948,17 @@
     if (ds) metaParts.push(ds);
     if (b.end) metaParts.push("&#8594; ends " + esc(b.end));
     const metaLine = metaParts.length ? `<div class="endtime">${metaParts.join("  &middot;  ")}</div>` : "";
+    const clashes = overlapMap[b.id];
+    const overlapBadge = clashes && clashes.length
+      ? `<button class="overlap-badge" data-overlap="${b.id}" aria-label="Show overlapping shows">&#9888; Overlap (${clashes.length})</button>`
+      : "";
     return `
-      <div class="band ${starred ? "starred" : ""} ${finished ? "ended" : ""} ${cls === "active" ? "live" : ""}">
+      <div class="band ${starred ? "starred" : ""} ${finished ? "ended" : ""} ${cls === "active" ? "live" : ""} ${clashes && clashes.length ? "has-overlap" : ""}">
         <div class="time">${esc(time)}<small>${cls === "active" ? "Live" : "Start"}</small></div>
         <div class="body">
           <div class="name">${esc(b.name)}</div>
           ${metaLine}
+          ${overlapBadge}
           ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
         </div>
         <div class="actions">
@@ -2198,6 +2418,17 @@
   function renderSettings() {
     document.getElementById("setShowReset").checked = !!settings.showReset;
     document.getElementById("setLead").value = String(settings.notifyLead || 25);
+
+    const nPairs = overlapPairs().length;
+    const ov = document.getElementById("overlapStatus");
+    const ob = document.getElementById("overlapsBtn");
+    if (nPairs > 0) {
+      ov.innerHTML = `&#9888; <b>${nPairs}</b> time clash${nPairs === 1 ? "" : "es"} between shows.`;
+      ob.disabled = false;
+    } else {
+      ov.innerHTML = "&#9989; No overlapping shows.";
+      ob.disabled = true;
+    }
     document.getElementById("setLayout").value = settings.layout === "stack" ? "stack" : "swipe";
     const status = document.getElementById("rollbackStatus");
     if (rollback) {
@@ -2494,6 +2725,7 @@
     loadPicks();
     loadEnded();
     loadSettings();
+    loadSortModes();
     loadRollback();
     renderTabs();
     renderStages();
@@ -2550,6 +2782,7 @@
     document.getElementById("setShowReset").addEventListener("change", toggleShowReset);
     document.getElementById("setLead").addEventListener("change", changeNotifyLead);
     document.getElementById("calBtn").addEventListener("click", exportCalendar);
+    document.getElementById("overlapsBtn").addEventListener("click", openOverlapsPopup);
     document.getElementById("setLayout").addEventListener("change", changeLayout);
     document.getElementById("exportBtn").addEventListener("click", exportConfig);
     document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
