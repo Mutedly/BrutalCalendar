@@ -234,6 +234,91 @@
     }
 
     /* ============================================================
+       NEXT UP / ON NOW BANNER
+       ============================================================ */
+    .nextup {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      border: none;
+      border-top: 1px solid var(--line);
+      background: linear-gradient(90deg, rgba(225,29,29,0.16), rgba(20,20,20,0.0));
+      color: var(--ink);
+      padding: 10px 14px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .nextup[hidden] { display: none; }
+    .nextup:active { background: linear-gradient(90deg, rgba(225,29,29,0.28), rgba(20,20,20,0.0)); }
+    .nextup.on-now { background: linear-gradient(90deg, rgba(34,197,94,0.18), rgba(20,20,20,0.0)); }
+
+    .nu-dot {
+      flex: 0 0 auto;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 0 rgba(225,29,29,0.6);
+      animation: pulse 1.8s infinite;
+    }
+    .nextup.on-now .nu-dot { background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,0.6); animation: pulseG 1.4s infinite; }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(225,29,29,0.6); }
+      70%  { box-shadow: 0 0 0 9px rgba(225,29,29,0); }
+      100% { box-shadow: 0 0 0 0 rgba(225,29,29,0); }
+    }
+    @keyframes pulseG {
+      0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
+      70%  { box-shadow: 0 0 0 9px rgba(34,197,94,0); }
+      100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+
+    .nu-main { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+    .nu-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--accent-2);
+    }
+    .nextup.on-now .nu-label { color: #22c55e; }
+    .nu-band {
+      font-size: 16px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nu-meta {
+      font-size: 11px;
+      color: var(--ink-dim);
+      letter-spacing: .5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nu-count {
+      flex: 0 0 auto;
+      font-family: var(--mono);
+      font-weight: 800;
+      font-size: 14px;
+      color: var(--ink);
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 9px;
+      white-space: nowrap;
+    }
+
+    /* Brief flash when a band is focused from the banner / search */
+    .band.flash { animation: flash 1.4s ease; }
+    @keyframes flash {
+      0%, 100% { box-shadow: none; }
+      30% { box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(225,29,29,0.5); }
+    }
+
+    /* ============================================================
        MAIN — horizontal scroll-snap stage carousel
        ============================================================ */
     main {
@@ -765,6 +850,17 @@
       </div>
     </div>
     <nav class="stages" id="tabs"><!-- tabs injected by JS --></nav>
+
+    <!-- Live "next up / on now" banner driven by the device clock -->
+    <button class="nextup" id="nextUp" hidden aria-label="Jump to upcoming show">
+      <span class="nu-dot"></span>
+      <span class="nu-main">
+        <span class="nu-label" id="nuLabel">NEXT UP</span>
+        <span class="nu-band" id="nuBand"></span>
+        <span class="nu-meta" id="nuMeta"></span>
+      </span>
+      <span class="nu-count" id="nuCount"></span>
+    </button>
   </header>
 
   <!-- ============================================================
@@ -1120,6 +1216,100 @@
     return null;
   }
 
+  // Minutes since midnight for the device's current local time.
+  function nowMinutes() {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  // Parse "HH:MM" into minutes since midnight, or null if invalid.
+  function timeToMinutes(t) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec((t || "").trim());
+    if (!m) return null;
+    const h = +m[1], mn = +m[2];
+    if (h > 23 || mn > 59) return null;
+    return h * 60 + mn;
+  }
+
+  // Human-friendly gaps, e.g. "in 2h 5m", "in 45m", "12m ago", "now".
+  function fmtGap(mins, suffix, prefix) {
+    if (mins <= 0) return "now";
+    const h = Math.floor(mins / 60), mn = mins % 60;
+    let s = "";
+    if (h && mn) s = `${h}h ${mn}m`;
+    else if (h) s = `${h}h`;
+    else s = `${mn}m`;
+    return (prefix || "") + s + (suffix || "");
+  }
+
+  /* Find the show closest to the device clock.
+     - "now"  : a show that started within the last 90 min (latest one).
+     - "next" : the soonest upcoming show; wraps to the earliest show of
+                the day if everything today has already started. */
+  function computeNextUp() {
+    const now = nowMinutes();
+    const list = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => {
+      if (ended[b.id]) return;                 // skip finished shows
+      const tm = timeToMinutes(b.time);
+      if (tm === null) return;                 // skip undated entries
+      list.push({ band: b, stage, tm });
+    }));
+    if (!list.length) return null;
+
+    // ON NOW — most recent start within the last 90 minutes.
+    let current = null;
+    list.forEach(it => {
+      const diff = now - it.tm;
+      if (diff >= 0 && diff <= 90 && (!current || it.tm > current.tm)) current = it;
+    });
+    if (current) return { band: current.band, stage: current.stage, mode: "now", diff: now - current.tm };
+
+    // NEXT UP — soonest start at/after now, else wrap to earliest (tomorrow).
+    let next = null;
+    list.forEach(it => { if (it.tm >= now && (!next || it.tm < next.tm)) next = it; });
+    let wrap = false;
+    if (!next) { list.forEach(it => { if (!next || it.tm < next.tm) next = it; }); wrap = true; }
+    const diff = wrap ? (next.tm + 1440 - now) : (next.tm - now);
+    return { band: next.band, stage: next.stage, mode: "next", diff };
+  }
+
+  let nextUpBandId = null;
+  let nextUpStage = null;
+
+  function updateNextUp() {
+    const el = document.getElementById("nextUp");
+    const info = computeNextUp();
+    if (!info) { el.hidden = true; nextUpBandId = null; nextUpStage = null; return; }
+
+    nextUpBandId = info.band.id;
+    nextUpStage = info.stage;
+    el.hidden = false;
+    el.classList.toggle("on-now", info.mode === "now");
+    document.getElementById("nuLabel").textContent = info.mode === "now" ? "On Now" : "Next Up";
+    document.getElementById("nuBand").textContent = info.band.name;
+    document.getElementById("nuMeta").textContent = (info.band.time || "--:--") + "  \u00b7  " + info.stage;
+    document.getElementById("nuCount").textContent =
+      info.mode === "now" ? fmtGap(info.diff, " ago") : fmtGap(info.diff, "", "in ");
+  }
+
+  // Jump to the next-up band's stage and briefly highlight its row.
+  function goToNextUp() {
+    if (!nextUpBandId || !nextUpStage) return;
+    goToStage(STAGES.indexOf(nextUpStage));
+    requestAnimationFrame(() => {
+      const carousel = document.getElementById("carousel");
+      const btn = carousel.querySelector(`[data-star="${nextUpBandId}"]`);
+      const row = btn ? btn.closest(".band") : null;
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.classList.remove("flash");
+        void row.offsetWidth; // restart the animation
+        row.classList.add("flash");
+      }
+    });
+  }
+
   // Escape user text before injecting into innerHTML.
   function esc(str) {
     return String(str).replace(/[&<>"']/g, c => ({
@@ -1200,6 +1390,8 @@
       el.addEventListener("click", () => toggleStar(el.getAttribute("data-star"))));
     wrap.querySelectorAll("[data-end]").forEach(el =>
       el.addEventListener("click", () => toggleEnded(el.getAttribute("data-end"))));
+
+    updateNextUp();
   }
 
   function bandRow(b) {
@@ -1693,6 +1885,12 @@
     renderStages();
     applySettings();
     watchScroll();
+
+    // Keep the "next up / on now" banner in sync with the device clock.
+    updateNextUp();
+    setInterval(updateNextUp, 30000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) updateNextUp(); });
+    document.getElementById("nextUp").addEventListener("click", goToNextUp);
 
     document.getElementById("fab").addEventListener("click", () => openSheet(null));
     document.getElementById("cancelBtn").addEventListener("click", closeSheet);
