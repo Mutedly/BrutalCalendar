@@ -547,12 +547,40 @@
 
     .empty.small { padding: 18px 16px; font-size: 13px; }
 
+    /* Row holding the date + overlap badges above the band name */
+    .badges-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .badges-row:empty { display: none; }
+
+    /* Clear, prominent date badge */
+    .date-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 9px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      white-space: nowrap;
+    }
+    .stage.secondary-stage .date-badge { background: var(--gold); color: #161616; }
+    .band.ended .date-badge { background: var(--ink-faint); color: #0a0a0a; }
+
     /* Overlap warning badge inside a band card */
     .overlap-badge {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      margin-top: 6px;
       background: rgba(217,164,65,0.16);
       border: 1px solid var(--gold);
       color: var(--gold);
@@ -1942,12 +1970,10 @@
     const cls = classify(b);
     const finished = cls === "ended";
     const time = b.time || "--:--";
-    // Small meta line: date + end time.
-    const metaParts = [];
+    // Clear, prominent date badge; end time stays as a small meta line.
     const ds = fmtDateShort(b.date);
-    if (ds) metaParts.push(ds);
-    if (b.end) metaParts.push("&#8594; ends " + esc(b.end));
-    const metaLine = metaParts.length ? `<div class="endtime">${metaParts.join("  &middot;  ")}</div>` : "";
+    const dateBadge = ds ? `<span class="date-badge">${esc(ds.toUpperCase())}</span>` : "";
+    const metaLine = b.end ? `<div class="endtime">&#8594; ends ${esc(b.end)}</div>` : "";
     const clashes = overlapMap[b.id];
     const overlapBadge = clashes && clashes.length
       ? `<button class="overlap-badge" data-overlap="${b.id}" aria-label="Show overlapping shows">&#9888; Overlap (${clashes.length})</button>`
@@ -1956,9 +1982,9 @@
       <div class="band ${starred ? "starred" : ""} ${finished ? "ended" : ""} ${cls === "active" ? "live" : ""} ${clashes && clashes.length ? "has-overlap" : ""}">
         <div class="time">${esc(time)}<small>${cls === "active" ? "Live" : "Start"}</small></div>
         <div class="body">
+          <div class="badges-row">${dateBadge}${overlapBadge}</div>
           <div class="name">${esc(b.name)}</div>
           ${metaLine}
-          ${overlapBadge}
           ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
         </div>
         <div class="actions">
