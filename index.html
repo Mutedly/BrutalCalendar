@@ -445,6 +445,14 @@
       letter-spacing: .5px;
       word-break: break-word;
     }
+    .band .endtime {
+      margin-top: 3px;
+      font-size: 11px;
+      font-family: var(--mono);
+      letter-spacing: .5px;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+    }
     .band .notes {
       margin-top: 3px;
       font-size: 13px;
@@ -913,6 +921,12 @@
           <div class="err">Start time is required.</div>
         </div>
 
+        <div class="field" id="f-end">
+          <label for="iEnd">End Time (optional)</label>
+          <input type="time" id="iEnd" />
+          <div class="err">End time must be after the start time.</div>
+        </div>
+
         <div class="field" id="f-stage">
           <label for="iStage">Stage</label>
           <select id="iStage"></select>
@@ -1034,22 +1048,22 @@
   function defaultSchedule() {
     return {
       "SEA SHEPHERD": [
-        { id: uid(), name: "MESHUGGAH", time: "21:30", notes: "Headliner — get there early" },
-        { id: uid(), name: "GOJIRA", time: "19:45", notes: "" },
-        { id: uid(), name: "AT THE GATES", time: "18:00", notes: "Melodic death classics" }
+        { id: uid(), name: "MESHUGGAH", time: "21:30", end: "22:45", notes: "Headliner — get there early" },
+        { id: uid(), name: "GOJIRA", time: "19:45", end: "20:55", notes: "" },
+        { id: uid(), name: "AT THE GATES", time: "18:00", end: "18:50", notes: "Melodic death classics" }
       ],
       "MARSHALL": [
-        { id: uid(), name: "BEHEMOTH", time: "22:00", notes: "Full stage show" },
-        { id: uid(), name: "CARCASS", time: "20:15", notes: "" },
-        { id: uid(), name: "OBITUARY", time: "18:30", notes: "" }
+        { id: uid(), name: "BEHEMOTH", time: "22:00", end: "23:15", notes: "Full stage show" },
+        { id: uid(), name: "CARCASS", time: "20:15", end: "21:15", notes: "" },
+        { id: uid(), name: "OBITUARY", time: "18:30", end: "19:25", notes: "" }
       ],
       "OBSCURE": [
-        { id: uid(), name: "ULCERATE", time: "17:00", notes: "Atmospheric tech death" },
-        { id: uid(), name: "FULL OF HELL", time: "15:30", notes: "" }
+        { id: uid(), name: "ULCERATE", time: "17:00", end: "17:50", notes: "Atmospheric tech death" },
+        { id: uid(), name: "FULL OF HELL", time: "15:30", end: "16:15", notes: "" }
       ],
       "OCTAGON": [
-        { id: uid(), name: "IMPERIAL TRIUMPHANT", time: "16:00", notes: "Avant-garde, masks" },
-        { id: uid(), name: "BLOOD INCANTATION", time: "14:00", notes: "Cosmic death metal" }
+        { id: uid(), name: "IMPERIAL TRIUMPHANT", time: "16:00", end: "16:50", notes: "Avant-garde, masks" },
+        { id: uid(), name: "BLOOD INCANTATION", time: "14:00", end: "14:50", notes: "Cosmic death metal" }
       ]
     };
   }
@@ -1102,6 +1116,7 @@
           id: typeof b.id === "string" && b.id ? b.id : uid(),
           name: typeof b.name === "string" ? b.name : "",
           time: typeof b.time === "string" ? b.time : "",
+          end: typeof b.end === "string" ? b.end : "",
           notes: typeof b.notes === "string" ? b.notes : ""
         }))
         .filter(b => b.name); // drop nameless entries
@@ -1253,15 +1268,18 @@
       if (ended[b.id]) return;                 // skip finished shows
       const tm = timeToMinutes(b.time);
       if (tm === null) return;                 // skip undated entries
-      list.push({ band: b, stage, tm });
+      list.push({ band: b, stage, tm, em: timeToMinutes(b.end) });
     }));
     if (!list.length) return null;
 
-    // ON NOW — most recent start within the last 90 minutes.
+    // ON NOW — use the end time when available (now within [start, end)),
+    // otherwise fall back to "started within the last 90 minutes".
     let current = null;
     list.forEach(it => {
-      const diff = now - it.tm;
-      if (diff >= 0 && diff <= 90 && (!current || it.tm > current.tm)) current = it;
+      const playing = it.em !== null
+        ? (now >= it.tm && now < it.em)
+        : (now >= it.tm && now - it.tm <= 90);
+      if (playing && (!current || it.tm > current.tm)) current = it;
     });
     if (current) return { band: current.band, stage: current.stage, mode: "now", diff: now - current.tm };
 
@@ -1398,11 +1416,15 @@
     const starred = !!picks[b.id];
     const isEnded = !!ended[b.id];
     const time = b.time || "--:--";
+    const endLine = b.end
+      ? `<div class="endtime">&#8594; ends ${esc(b.end)}</div>`
+      : "";
     return `
       <div class="band ${starred ? "starred" : ""} ${isEnded ? "ended" : ""}">
         <div class="time">${esc(time)}<small>Start</small></div>
         <div class="body">
           <div class="name">${esc(b.name)}</div>
+          ${endLine}
           ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
         </div>
         <div class="actions">
@@ -1469,6 +1491,7 @@
       document.getElementById("bandId").value = found.band.id;
       document.getElementById("iName").value = found.band.name;
       document.getElementById("iTime").value = found.band.time;
+      document.getElementById("iEnd").value = found.band.end || "";
       document.getElementById("iNotes").value = found.band.notes;
       fillStageSelect(found.stage);
       document.getElementById("deleteRow").classList.remove("hidden");
@@ -1487,7 +1510,7 @@
   }
 
   function clearErrors() {
-    ["f-name", "f-time"].forEach(id => document.getElementById(id).classList.remove("invalid"));
+    ["f-name", "f-time", "f-end"].forEach(id => document.getElementById(id).classList.remove("invalid"));
   }
 
   function submitForm(e) {
@@ -1497,20 +1520,27 @@
     const id = document.getElementById("bandId").value;
     const name = document.getElementById("iName").value.trim();
     const time = document.getElementById("iTime").value.trim();
+    const end = document.getElementById("iEnd").value.trim();
     const notes = document.getElementById("iNotes").value.trim();
     const stage = document.getElementById("iStage").value;
 
-    // Validation: name + time required.
+    // Validation: name + time required; end (if set) must be after start.
     let ok = true;
     if (!name) { document.getElementById("f-name").classList.add("invalid"); ok = false; }
     if (!time) { document.getElementById("f-time").classList.add("invalid"); ok = false; }
+    if (ok && end) {
+      const s = timeToMinutes(time), e = timeToMinutes(end);
+      if (s !== null && e !== null && e <= s) {
+        document.getElementById("f-end").classList.add("invalid"); ok = false;
+      }
+    }
     if (!ok) return;
 
     if (id) {
       // EDIT — possibly move between stages.
       const found = findBand(id);
       if (found) {
-        const updated = { id, name, time, notes };
+        const updated = { id, name, time, end, notes };
         if (found.stage !== stage) {
           schedule[found.stage].splice(found.idx, 1); // remove from old stage
           schedule[stage].push(updated);              // add to new stage
@@ -1521,7 +1551,7 @@
       toast("Band updated");
     } else {
       // ADD
-      schedule[stage].push({ id: uid(), name, time, notes });
+      schedule[stage].push({ id: uid(), name, time, end, notes });
       toast("Band added");
     }
 
