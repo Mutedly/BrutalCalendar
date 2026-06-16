@@ -298,6 +298,23 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .nu-band-star { color: var(--star); margin-right: 4px; }
+    .nu-more {
+      align-self: flex-start;
+      margin-top: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--accent);
+      color: var(--accent-2);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 9px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .nu-more[hidden] { display: none; }
+    .nu-more:active { transform: scale(0.94); }
     .nu-count {
       flex: 0 0 auto;
       font-family: var(--mono);
@@ -820,6 +837,30 @@
     .dialog .row-btns { margin-top: 0; }
     .btn:disabled { opacity: .4; pointer-events: none; }
 
+    /* Same-time slot popup */
+    .slot-dialog { text-align: left; }
+    .slot-dialog .dlg-icon, .slot-dialog h3 { text-align: center; }
+    #slotSub { text-align: center; }
+    .slot-list { max-height: 50vh; overflow-y: auto; margin-bottom: 14px; }
+    .slot-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .slot-item:active { background: var(--bg-2); }
+    .slot-item .s-time { font-family: var(--mono); font-weight: 800; font-size: 15px; min-width: 92px; }
+    .slot-item .s-body { flex: 1; min-width: 0; }
+    .slot-item .s-name { font-size: 16px; font-weight: 800; }
+    .slot-item .s-stage { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-dim); margin-top: 2px; }
+    .slot-item .s-star { color: var(--ink-faint); font-size: 18px; }
+    .slot-item .s-star.on { color: var(--star); }
+
     /* Toast */
     .toast {
       position: fixed;
@@ -860,15 +901,16 @@
     <nav class="stages" id="tabs"><!-- tabs injected by JS --></nav>
 
     <!-- Live "next up / on now" banner driven by the device clock -->
-    <button class="nextup" id="nextUp" hidden aria-label="Jump to upcoming show">
+    <div class="nextup" id="nextUp" hidden>
       <span class="nu-dot"></span>
-      <span class="nu-main">
+      <div class="nu-main" id="nuMain" role="button" tabindex="0" aria-label="Jump to upcoming show">
         <span class="nu-label" id="nuLabel">NEXT UP</span>
         <span class="nu-band" id="nuBand"></span>
         <span class="nu-meta" id="nuMeta"></span>
-      </span>
+        <button class="nu-more" id="nuMore" hidden type="button"></button>
+      </div>
       <span class="nu-count" id="nuCount"></span>
-    </button>
+    </div>
   </header>
 
   <!-- ============================================================
@@ -997,6 +1039,21 @@
 
       <div class="row-btns">
         <button type="button" class="btn btn-ghost" id="settingsClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       "SAME TIME" POPUP — every band playing in the current slot
+       ============================================================ -->
+  <div class="overlay dialog-overlay" id="slotOverlay">
+    <div class="dialog slot-dialog" role="dialog" aria-modal="true" aria-labelledby="slotTitle">
+      <div class="dlg-icon">&#127908;</div>
+      <h3 id="slotTitle">Same Time Slot</h3>
+      <p id="slotSub"></p>
+      <div class="slot-list" id="slotList"></div>
+      <div class="row-btns">
+        <button type="button" class="btn btn-ghost" id="slotClose">Close</button>
       </div>
     </div>
   </div>
@@ -1257,6 +1314,32 @@
     return (prefix || "") + s + (suffix || "");
   }
 
+  /* The minute threshold after which a show counts as finished.
+     Uses the end time when present (adding a day if it crosses midnight),
+     otherwise assumes a ~90 minute set after the start time. */
+  function endRefMinutes(b) {
+    const tm = timeToMinutes(b.time);
+    if (tm === null) return null;
+    let em = timeToMinutes(b.end);
+    if (em === null) return tm + 90;
+    if (em <= tm) em += 1440;
+    return em;
+  }
+
+  /* Effective ended state, combining the device clock with manual overrides.
+     ended[id] === "ended" (or legacy true) -> forced ended.
+     ended[id] === "active"                 -> forced back to upcoming.
+     no override                            -> auto: ended once the clock
+                                               passes the show's end time. */
+  function isShowEnded(b) {
+    const ov = ended[b.id];
+    if (ov === "ended" || ov === true) return true;
+    if (ov === "active") return false;
+    const ref = endRefMinutes(b);
+    if (ref === null) return false;
+    return nowMinutes() >= ref;
+  }
+
   /* Find the show closest to the device clock.
      - "now"  : a show that started within the last 90 min (latest one).
      - "next" : the soonest upcoming show; wraps to the earliest show of
@@ -1265,59 +1348,149 @@
     const now = nowMinutes();
     const list = [];
     STAGES.forEach(stage => schedule[stage].forEach(b => {
-      if (ended[b.id]) return;                 // skip finished shows
+      if (isShowEnded(b)) return;              // skip finished shows
       const tm = timeToMinutes(b.time);
       if (tm === null) return;                 // skip undated entries
-      list.push({ band: b, stage, tm, em: timeToMinutes(b.end) });
+      list.push({ band: b, stage, tm, em: endRefMinutes(b) });
     }));
     if (!list.length) return null;
 
-    // ON NOW — use the end time when available (now within [start, end)),
-    // otherwise fall back to "started within the last 90 minutes".
-    let current = null;
-    list.forEach(it => {
-      const playing = it.em !== null
-        ? (now >= it.tm && now < it.em)
-        : (now >= it.tm && now - it.tm <= 90);
-      if (playing && (!current || it.tm > current.tm)) current = it;
-    });
-    if (current) return { band: current.band, stage: current.stage, mode: "now", diff: now - current.tm };
+    // ON NOW — every show currently within its [start, end) window.
+    const playing = list.filter(it => now >= it.tm && now < it.em);
+    if (playing.length) return { mode: "now", group: playing };
 
     // NEXT UP — soonest start at/after now, else wrap to earliest (tomorrow).
-    let next = null;
-    list.forEach(it => { if (it.tm >= now && (!next || it.tm < next.tm)) next = it; });
+    let nextTm = null;
+    list.forEach(it => { if (it.tm >= now && (nextTm === null || it.tm < nextTm)) nextTm = it.tm; });
     let wrap = false;
-    if (!next) { list.forEach(it => { if (!next || it.tm < next.tm) next = it; }); wrap = true; }
-    const diff = wrap ? (next.tm + 1440 - now) : (next.tm - now);
-    return { band: next.band, stage: next.stage, mode: "next", diff };
+    if (nextTm === null) { list.forEach(it => { if (nextTm === null || it.tm < nextTm) nextTm = it.tm; }); wrap = true; }
+    const group = list.filter(it => it.tm === nextTm);
+    const diff = wrap ? (nextTm + 1440 - now) : (nextTm - now);
+    return { mode: "next", group, diff };
+  }
+
+  // Choose which band of an overlapping slot to feature: a starred one
+  // first, otherwise a stable pseudo-random pick (so it doesn't flicker).
+  function pickPrimary(group) {
+    const starred = group.filter(g => picks[g.band.id]);
+    const pool = starred.length ? starred : group;
+    let h = 0;
+    const key = pool.map(g => g.band.id).join("");
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+    return pool[h % pool.length];
   }
 
   let nextUpBandId = null;
   let nextUpStage = null;
+  let bannerGroup = [];   // full set of bands in the current banner slot
 
   function updateNextUp() {
     const el = document.getElementById("nextUp");
     const info = computeNextUp();
-    if (!info) { el.hidden = true; nextUpBandId = null; nextUpStage = null; return; }
+    if (!info) {
+      el.hidden = true; nextUpBandId = null; nextUpStage = null; bannerGroup = [];
+      return;
+    }
 
-    nextUpBandId = info.band.id;
-    nextUpStage = info.stage;
+    bannerGroup = info.group.slice();
+    const primary = pickPrimary(info.group);
+    nextUpBandId = primary.band.id;
+    nextUpStage = primary.stage;
+
+    const isStarred = !!picks[primary.band.id];
+    const now = nowMinutes();
+    const diff = info.mode === "now" ? (now - primary.tm) : info.diff;
+
     el.hidden = false;
     el.classList.toggle("on-now", info.mode === "now");
     document.getElementById("nuLabel").textContent = info.mode === "now" ? "On Now" : "Next Up";
-    document.getElementById("nuBand").textContent = info.band.name;
-    document.getElementById("nuMeta").textContent = (info.band.time || "--:--") + "  \u00b7  " + info.stage;
+    document.getElementById("nuBand").innerHTML =
+      (isStarred ? '<span class="nu-band-star">&#9733;</span>' : "") + esc(primary.band.name);
+    document.getElementById("nuMeta").textContent = (primary.band.time || "--:--") + "  \u00b7  " + primary.stage;
     document.getElementById("nuCount").textContent =
-      info.mode === "now" ? fmtGap(info.diff, " ago") : fmtGap(info.diff, "", "in ");
+      info.mode === "now" ? fmtGap(diff, " ago") : fmtGap(diff, "", "in ");
+
+    // "+N MORE" appears only when other bands share the same slot.
+    const more = document.getElementById("nuMore");
+    const others = info.group.length - 1;
+    if (others > 0) {
+      more.hidden = false;
+      more.textContent = "+" + others + " MORE";
+    } else {
+      more.hidden = true;
+    }
   }
 
-  // Jump to the next-up band's stage and briefly highlight its row.
-  function goToNextUp() {
-    if (!nextUpBandId || !nextUpStage) return;
-    goToStage(STAGES.indexOf(nextUpStage));
+  // Popup listing every band in the current banner slot.
+  function openSlotPopup() {
+    if (!bannerGroup.length) return;
+    const overlay = document.getElementById("slotOverlay");
+    const sub = document.getElementById("slotSub");
+    const listEl = document.getElementById("slotList");
+
+    const times = bannerGroup.map(g => g.band.time).filter(Boolean);
+    sub.textContent = times.length ? (times.sort()[0] + " — overlapping shows") : "Overlapping shows";
+
+    listEl.innerHTML = bannerGroup
+      .slice()
+      .sort((a, b) => a.stage.localeCompare(b.stage))
+      .map(g => {
+        const starred = !!picks[g.band.id];
+        return `
+          <div class="slot-item" data-slot="${g.band.id}">
+            <div class="s-time">${esc(g.band.time || "--:--")}${g.band.end ? " &#8594; " + esc(g.band.end) : ""}</div>
+            <div class="s-body">
+              <div class="s-name">${esc(g.band.name)}</div>
+              <div class="s-stage">${esc(g.stage)}</div>
+            </div>
+            <span class="s-star ${starred ? "on" : ""}">${starred ? "&#9733;" : "&#9734;"}</span>
+          </div>`;
+      }).join("");
+
+    listEl.querySelectorAll("[data-slot]").forEach(el => el.addEventListener("click", () => {
+      const id = el.getAttribute("data-slot");
+      const found = findBand(id);
+      closeSlotPopup();
+      if (found) {
+        goToStage(STAGES.indexOf(found.stage));
+        flashBand(id);
+      }
+    }));
+
+    overlay.classList.add("open");
+  }
+  function closeSlotPopup() {
+    document.getElementById("slotOverlay").classList.remove("open");
+  }
+
+  /* Periodic clock sync: re-render only when the set of auto-ended shows
+     actually changes (rare), preserving the current stage position so the
+     view doesn't jump while browsing. Otherwise just refresh the banner. */
+  let lastEndedSig = "";
+  function autoEndedSignature() {
+    const ids = [];
+    STAGES.forEach(s => schedule[s].forEach(b => { if (isShowEnded(b)) ids.push(b.id); }));
+    return ids.sort().join(",");
+  }
+  function syncAutoEnded() {
+    const sig = autoEndedSignature();
+    if (sig !== lastEndedSig) {
+      lastEndedSig = sig;
+      const idx = currentStageIndex;
+      renderStages();              // also refreshes the banner
+      const carousel = document.getElementById("carousel");
+      const sections = carousel.querySelectorAll("section.stage");
+      if (sections[idx]) carousel.scrollLeft = sections[idx].offsetLeft;
+    } else {
+      updateNextUp();
+    }
+  }
+
+  // Scroll a band's row into view and briefly highlight it.
+  function flashBand(id) {
     requestAnimationFrame(() => {
       const carousel = document.getElementById("carousel");
-      const btn = carousel.querySelector(`[data-star="${nextUpBandId}"]`);
+      const btn = carousel.querySelector(`[data-star="${id}"]`);
       const row = btn ? btn.closest(".band") : null;
       if (row) {
         row.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1326,6 +1499,13 @@
         row.classList.add("flash");
       }
     });
+  }
+
+  // Jump to the featured band's stage and highlight its row.
+  function goToNextUp() {
+    if (!nextUpBandId || !nextUpStage) return;
+    goToStage(STAGES.indexOf(nextUpStage));
+    flashBand(nextUpBandId);
   }
 
   // Escape user text before injecting into innerHTML.
@@ -1364,8 +1544,9 @@
       const badgeLabel = type === "main" ? "MAIN STAGE" : "SECONDARY STAGE";
 
       // Split into upcoming (active) and ended shows. Both stay time-sorted.
-      const active = bands.filter(b => !ended[b.id]);
-      const finished = bands.filter(b => ended[b.id]);
+      // Ended state is auto-derived from the clock + any manual override.
+      const active = bands.filter(b => !isShowEnded(b));
+      const finished = bands.filter(b => isShowEnded(b));
 
       let rows = "";
       if (bands.length === 0) {
@@ -1414,13 +1595,13 @@
 
   function bandRow(b) {
     const starred = !!picks[b.id];
-    const isEnded = !!ended[b.id];
+    const finished = isShowEnded(b);
     const time = b.time || "--:--";
     const endLine = b.end
       ? `<div class="endtime">&#8594; ends ${esc(b.end)}</div>`
       : "";
     return `
-      <div class="band ${starred ? "starred" : ""} ${isEnded ? "ended" : ""}">
+      <div class="band ${starred ? "starred" : ""} ${finished ? "ended" : ""}">
         <div class="time">${esc(time)}<small>Start</small></div>
         <div class="body">
           <div class="name">${esc(b.name)}</div>
@@ -1429,7 +1610,7 @@
         </div>
         <div class="actions">
           <button class="mini star ${starred ? "on" : ""}" data-star="${b.id}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
-          <button class="mini check ${isEnded ? "on" : ""}" data-end="${b.id}" aria-label="Mark as ended">&#10003;</button>
+          <button class="mini check ${finished ? "on" : ""}" data-end="${b.id}" aria-label="Mark as ended">&#10003;</button>
           <button class="mini" data-edit="${b.id}" aria-label="Edit">&#9998;</button>
         </div>
       </div>`;
@@ -1595,10 +1776,14 @@
     refreshPanelIfOpen();
   }
 
-  // Mark / unmark a show as ended — moves it to the "ENDED SHOWS" section.
+  // Manual toggle — stores an override that wins over the clock-based
+  // auto-detection, so the user can always force a show in or out of ENDED.
   function toggleEnded(id) {
-    if (ended[id]) { delete ended[id]; toast("Moved back to upcoming"); }
-    else { ended[id] = true; toast("Moved to ended shows"); }
+    const found = findBand(id);
+    if (!found) return;
+    const currentlyEnded = isShowEnded(found.band);
+    ended[id] = currentlyEnded ? "active" : "ended";
+    toast(currentlyEnded ? "Moved back to upcoming" : "Moved to ended shows");
     saveEnded();
     renderStages();
     refreshPanelIfOpen();
@@ -1916,11 +2101,22 @@
     applySettings();
     watchScroll();
 
-    // Keep the "next up / on now" banner in sync with the device clock.
+    // Keep the banner + auto-ended shows in sync with the device clock.
+    lastEndedSig = autoEndedSignature();
     updateNextUp();
-    setInterval(updateNextUp, 30000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) updateNextUp(); });
-    document.getElementById("nextUp").addEventListener("click", goToNextUp);
+    setInterval(syncAutoEnded, 20000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) syncAutoEnded(); });
+
+    const nuMain = document.getElementById("nuMain");
+    nuMain.addEventListener("click", goToNextUp);
+    nuMain.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToNextUp(); }
+    });
+    document.getElementById("nuMore").addEventListener("click", (e) => { e.stopPropagation(); openSlotPopup(); });
+    document.getElementById("slotClose").addEventListener("click", closeSlotPopup);
+    document.getElementById("slotOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "slotOverlay") closeSlotPopup();
+    });
 
     document.getElementById("fab").addEventListener("click", () => openSheet(null));
     document.getElementById("cancelBtn").addEventListener("click", closeSheet);
@@ -1969,6 +2165,7 @@
         closeSheet();
         closePanel();
         closeSettings();
+        closeSlotPopup();
       }
     });
 

@@ -2,7 +2,7 @@
    App-shell precache + offline-first fetch handling.
    All app logic stays in index.html; this file only handles caching. */
 
-const CACHE = "brutal-assault-v3";
+const CACHE = "brutal-assault-v4";
 
 // Everything needed to run the app fully offline.
 const ASSETS = [
