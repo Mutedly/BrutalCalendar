@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
+
+  <!-- PWA-friendly meta tags (single-file, no external manifest/service-worker) -->
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="description" content="Brutal Assault festival band schedule — carry it offline on your phone." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Brutal Assault" />
+  <meta name="color-scheme" content="dark" />
+
+  <!-- Inline favicon so we never hit the network -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230a0a0a'/><text x='50' y='72' font-size='70' text-anchor='middle' fill='%23e11d1d' font-family='monospace'>BA</text></svg>" />
+
+  <title>Brutal Assault — Schedule</title>
+
+  <style>
+    /* ============================================================
+       THEME / DESIGN TOKENS
+       Dark brutal metal festival aesthetic, high contrast.
+       ============================================================ */
+    :root {
+      --bg: #0a0a0a;
+      --bg-2: #141414;
+      --bg-card: #181818;
+      --bg-card-2: #161616;
+      --ink: #f4f4f4;
+      --ink-dim: #a9a9a9;
+      --ink-faint: #6a6a6a;
+      --line: #2a2a2a;
+      --accent: #e11d1d;          /* blood red */
+      --accent-2: #ff3b3b;
+      --gold: #d9a441;            /* secondary stage accent */
+      --star: #ffcc33;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --nav-h: 116px;
+      /* System font stack only — no external fonts allowed */
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font);
+      overscroll-behavior: none;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Subtle metallic texture using gradients (no external assets) */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(1200px 500px at 50% -10%, rgba(225,29,29,0.10), transparent 60%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 2px, transparent 2px 4px);
+      z-index: 0;
+    }
+
+    /* ============================================================
+       STICKY TOP NAVIGATION
+       ============================================================ */
+    header.topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: linear-gradient(180deg, rgba(10,10,10,0.98), rgba(10,10,10,0.92));
+      backdrop-filter: blur(8px);
+      border-bottom: 2px solid var(--accent);
+      padding-top: var(--safe-top);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 14px 8px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-weight: 900;
+      font-family: var(--mono);
+      color: var(--ink);
+      line-height: 1;
+    }
+    .brand h1 .x { color: var(--accent); }
+    .brand .sub {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+    }
+
+    .tools {
+      display: flex;
+      gap: 8px;
+    }
+    .icon-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      font-size: 18px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .icon-btn:active { transform: scale(0.94); }
+    .icon-btn.active { border-color: var(--star); color: var(--star); }
+
+    /* Stage tab strip */
+    nav.stages {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 8px 12px 12px;
+      scrollbar-width: none;
+    }
+    nav.stages::-webkit-scrollbar { display: none; }
+
+    .tab {
+      flex: 0 0 auto;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink-dim);
+      padding: 9px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .tab.main { border-left: 4px solid var(--accent); }
+    .tab.secondary { border-left: 4px solid var(--gold); }
+    .tab.current {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .tab.secondary.current {
+      background: var(--gold);
+      color: #161616;
+      border-color: var(--gold);
+    }
+
+    /* ============================================================
+       MAIN — horizontal scroll-snap stage carousel
+       ============================================================ */
+    main {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: flex;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      scrollbar-width: none;
+    }
+    main::-webkit-scrollbar { display: none; }
+
+    section.stage {
+      flex: 0 0 100%;
+      width: 100%;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      overflow-y: auto;
+      padding: 14px 14px calc(120px + var(--safe-bottom));
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Stage header card */
+    .stage-head {
+      position: relative;
+      border-radius: 16px;
+      padding: 18px 16px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .stage.main-stage .stage-head {
+      background:
+        linear-gradient(135deg, rgba(225,29,29,0.22), rgba(20,20,20,0.9)),
+        var(--bg-card);
+      border-color: rgba(225,29,29,0.5);
+      box-shadow: 0 0 0 1px rgba(225,29,29,0.15), 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .stage.secondary-stage .stage-head {
+      background:
+        linear-gradient(135deg, rgba(217,164,65,0.16), rgba(20,20,20,0.9)),
+        var(--bg-card-2);
+      border-color: rgba(217,164,65,0.4);
+    }
+
+    .stage-head .badge {
+      display: inline-block;
+      font-size: 10px;
+      letter-spacing: 2px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 4px 9px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .badge.main { background: var(--accent); color: #fff; }
+    .badge.secondary { background: var(--gold); color: #161616; }
+
+    .stage-head h2 {
+      margin: 0;
+      font-family: var(--mono);
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      line-height: 1.05;
+    }
+    .stage.main-stage .stage-head h2 { font-size: 34px; }
+    .stage.secondary-stage .stage-head h2 { font-size: 26px; }
+
+    .stage-head .count {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--ink-dim);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ============================================================
+       TIMELINE / BAND ROWS
+       ============================================================ */
+    .timeline { display: flex; flex-direction: column; gap: 10px; }
+
+    .band {
+      position: relative;
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 14px;
+      padding: 12px 12px 12px 14px;
+    }
+    .stage.secondary-stage .band { border-left-color: var(--gold); }
+    .band.starred { border-color: rgba(255,204,51,0.55); }
+
+    .band .time {
+      flex: 0 0 auto;
+      min-width: 58px;
+      font-family: var(--mono);
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: 1px;
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .band .time small {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--ink-faint);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .band .body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+    .band .name {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: .5px;
+      word-break: break-word;
+    }
+    .band .notes {
+      margin-top: 3px;
+      font-size: 13px;
+      color: var(--ink-dim);
+      word-break: break-word;
+    }
+
+    .band .actions { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+    .mini {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: var(--bg-2);
+      color: var(--ink);
+      font-size: 17px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+    .mini:active { transform: scale(0.92); }
+    .mini.star.on { color: var(--star); border-color: rgba(255,204,51,0.5); }
+
+    /* Empty state */
+    .empty {
+      text-align: center;
+      color: var(--ink-faint);
+      padding: 40px 16px;
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      font-size: 14px;
+      letter-spacing: 1px;
+    }
+    .empty .skull { font-size: 40px; display: block; margin-bottom: 8px; opacity: .6; }
+
+    /* ============================================================
+       FLOATING ADD BUTTON
+       ============================================================ */
+    .fab {
+      position: fixed;
+      right: 16px;
+      bottom: calc(18px + var(--safe-bottom));
+      z-index: 40;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-size: 34px;
+      font-weight: 700;
+      line-height: 1;
+      box-shadow: 0 8px 24px rgba(225,29,29,0.45);
+      cursor: pointer;
+    }
+    .fab:active { transform: scale(0.92); }
+
+    /* ============================================================
+       MODAL / BOTTOM SHEET
+       ============================================================ */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: auto; }
+
+    .sheet {
+      width: 100%;
+      max-width: 560px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-bottom: none;
+      border-radius: 20px 20px 0 0;
+      padding: 16px 16px calc(20px + var(--safe-bottom));
+      transform: translateY(100%);
+      transition: transform .25s ease;
+      max-height: 92dvh;
+      overflow-y: auto;
+    }
+    .overlay.open .sheet { transform: translateY(0); }
+
+    .sheet .grip { width: 44px; height: 5px; background: var(--line); border-radius: 99px; margin: 2px auto 14px; }
+    .sheet h3 {
+      margin: 0 0 16px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-size: 18px;
+    }
+
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .field input, .field textarea, .field select {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 16px; /* >=16px avoids iOS zoom-on-focus */
+      font-family: var(--font);
+    }
+    .field input:focus, .field textarea:focus, .field select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .field textarea { resize: vertical; min-height: 70px; }
+    .field .err { color: var(--accent-2); font-size: 12px; margin-top: 5px; display: none; }
+    .field.invalid input, .field.invalid select { border-color: var(--accent-2); }
+    .field.invalid .err { display: block; }
+
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost { background: var(--bg-card); color: var(--ink); border: 1px solid var(--line); }
+    .btn-danger { background: transparent; color: var(--accent-2); border: 1px solid rgba(255,59,59,0.4); }
+    .row-btns { display: flex; gap: 10px; margin-top: 4px; }
+    .row-btns .btn { flex: 1; }
+
+    /* ============================================================
+       SEARCH / PICKS PANEL (slides from top)
+       ============================================================ */
+    .panel {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      transform: translateY(-100%);
+      transition: transform .25s ease;
+      padding-top: var(--safe-top);
+    }
+    .panel.open { transform: translateY(0); }
+
+    .panel-head {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-head input {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 13px;
+      font-size: 16px;
+    }
+    .panel-head input:focus { outline: none; border-color: var(--accent); }
+    .panel-title {
+      font-family: var(--mono);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 16px;
+      flex: 1;
+      font-weight: 800;
+    }
+
+    .results { flex: 1; overflow-y: auto; padding: 12px 14px calc(20px + var(--safe-bottom)); }
+
+    .result {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .result .r-time { font-family: var(--mono); font-weight: 800; font-size: 18px; min-width: 52px; }
+    .result .r-body { flex: 1; min-width: 0; }
+    .result .r-name { font-size: 16px; font-weight: 800; }
+    .result .r-stage {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-top: 2px;
+    }
+    .result .r-star { color: var(--ink-faint); font-size: 18px; }
+    .result .r-star.on { color: var(--star); }
+
+    .seg {
+      display: flex;
+      gap: 6px;
+      padding: 10px 14px 0;
+    }
+    .seg button {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink-dim);
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(90px + var(--safe-bottom));
+      transform: translateX(-50%) translateY(20px);
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s, transform .2s;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!-- ============================================================
+       TOP BAR + STICKY STAGE NAV
+       ============================================================ -->
+  <header class="topbar">
+    <div class="brand">
+      <div>
+        <h1>BRUTAL<span class="x">/</span>ASSAULT</h1>
+        <div class="sub">Personal Stage Schedule</div>
+      </div>
+      <div class="tools">
+        <button class="icon-btn" id="btnPicks" title="My Picks" aria-label="My Picks">&#9733;</button>
+        <button class="icon-btn" id="btnSearch" title="Search" aria-label="Search">&#128269;</button>
+        <button class="icon-btn" id="btnReset" title="Reset to defaults" aria-label="Reset">&#8634;</button>
+      </div>
+    </div>
+    <nav class="stages" id="tabs"><!-- tabs injected by JS --></nav>
+  </header>
+
+  <!-- ============================================================
+       STAGE CAROUSEL
+       ============================================================ -->
+  <main id="carousel"><!-- stage sections injected by JS --></main>
+
+  <!-- Floating add button -->
+  <button class="fab" id="fab" aria-label="Add band">+</button>
+
+  <!-- ============================================================
+       ADD / EDIT BOTTOM SHEET
+       ============================================================ -->
+  <div class="overlay" id="overlay">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <div class="grip"></div>
+      <h3 id="sheetTitle">Add Band</h3>
+      <form id="bandForm" novalidate>
+        <input type="hidden" id="bandId" />
+
+        <div class="field" id="f-name">
+          <label for="iName">Band Name</label>
+          <input type="text" id="iName" autocomplete="off" placeholder="e.g. MESHUGGAH" />
+          <div class="err">Band name is required.</div>
+        </div>
+
+        <div class="field" id="f-time">
+          <label for="iTime">Start Time</label>
+          <input type="time" id="iTime" />
+          <div class="err">Start time is required.</div>
+        </div>
+
+        <div class="field" id="f-stage">
+          <label for="iStage">Stage</label>
+          <select id="iStage"></select>
+        </div>
+
+        <div class="field">
+          <label for="iNotes">Notes (optional)</label>
+          <textarea id="iNotes" placeholder="Pit plans, must-see solo, meet friends..."></textarea>
+        </div>
+
+        <div class="row-btns">
+          <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveBtn">Save</button>
+        </div>
+        <div class="row-btns" id="deleteRow">
+          <button type="button" class="btn btn-danger" id="deleteBtn">Delete Band</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SEARCH / PICKS PANEL
+       ============================================================ -->
+  <div class="panel" id="panel">
+    <div class="panel-head">
+      <span class="panel-title" id="panelTitle">Search</span>
+      <input type="search" id="searchInput" placeholder="Search bands across all stages..." autocomplete="off" />
+      <button class="icon-btn" id="panelClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="seg" id="panelSeg">
+      <button data-mode="all" class="on">All Bands</button>
+      <button data-mode="picks">&#9733; My Picks</button>
+    </div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+  "use strict";
+  /* =================================================================
+     BRUTAL ASSAULT — single-file offline schedule app.
+     Vanilla JS only. State persisted in localStorage.
+     ================================================================= */
+
+  // Stage order + classification. Main stages get dominant styling.
+  const STAGES = ["SEA SHEPHERD", "MARSHALL", "OBSCURE", "OCTAGON"];
+  const STAGE_TYPE = {
+    "SEA SHEPHERD": "main",
+    "MARSHALL": "main",
+    "OBSCURE": "secondary",
+    "OCTAGON": "secondary"
+  };
+
+  const LS_SCHEDULE = "ba_schedule_v1";
+  const LS_PICKS = "ba_picks_v1";
+
+  // ---- Default example data (used on first run / reset) -----------
+  function defaultSchedule() {
+    return {
+      "SEA SHEPHERD": [
+        { id: uid(), name: "MESHUGGAH", time: "21:30", notes: "Headliner — get there early" },
+        { id: uid(), name: "GOJIRA", time: "19:45", notes: "" },
+        { id: uid(), name: "AT THE GATES", time: "18:00", notes: "Melodic death classics" }
+      ],
+      "MARSHALL": [
+        { id: uid(), name: "BEHEMOTH", time: "22:00", notes: "Full stage show" },
+        { id: uid(), name: "CARCASS", time: "20:15", notes: "" },
+        { id: uid(), name: "OBITUARY", time: "18:30", notes: "" }
+      ],
+      "OBSCURE": [
+        { id: uid(), name: "ULCERATE", time: "17:00", notes: "Atmospheric tech death" },
+        { id: uid(), name: "FULL OF HELL", time: "15:30", notes: "" }
+      ],
+      "OCTAGON": [
+        { id: uid(), name: "IMPERIAL TRIUMPHANT", time: "16:00", notes: "Avant-garde, masks" },
+        { id: uid(), name: "BLOOD INCANTATION", time: "14:00", notes: "Cosmic death metal" }
+      ]
+    };
+  }
+
+  // crypto.randomUUID with a safe fallback (older mobile browsers / file://)
+  function uid() {
+    try {
+      if (window.crypto && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    } catch (e) { /* ignore */ }
+    return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
+  // ---- State -----------------------------------------------------
+  let schedule = {};
+  let picks = {};          // { bandId: true }
+  let currentStageIndex = 0;
+  let panelMode = "all";   // "all" | "picks"
+
+  /* =================================================================
+     PERSISTENCE — resilient to empty / corrupted localStorage.
+     ================================================================= */
+  function loadSchedule() {
+    let data = null;
+    try {
+      const raw = localStorage.getItem(LS_SCHEDULE);
+      if (raw) data = JSON.parse(raw);
+    } catch (e) {
+      console.warn("Schedule data corrupted, restoring defaults.", e);
+      data = null;
+    }
+    schedule = sanitizeSchedule(data) || defaultSchedule();
+  }
+
+  // Ensure the loaded object always has all 4 stages with valid bands.
+  function sanitizeSchedule(data) {
+    if (!data || typeof data !== "object") return null;
+    const clean = {};
+    let validStages = 0;
+    for (const stage of STAGES) {
+      const arr = Array.isArray(data[stage]) ? data[stage] : [];
+      if (Array.isArray(data[stage])) validStages++;
+      clean[stage] = arr
+        .filter(b => b && typeof b === "object")
+        .map(b => ({
+          id: typeof b.id === "string" && b.id ? b.id : uid(),
+          name: typeof b.name === "string" ? b.name : "",
+          time: typeof b.time === "string" ? b.time : "",
+          notes: typeof b.notes === "string" ? b.notes : ""
+        }))
+        .filter(b => b.name); // drop nameless entries
+    }
+    return validStages > 0 ? clean : null;
+  }
+
+  function loadPicks() {
+    try {
+      const raw = localStorage.getItem(LS_PICKS);
+      const data = raw ? JSON.parse(raw) : {};
+      picks = (data && typeof data === "object" && !Array.isArray(data)) ? data : {};
+    } catch (e) {
+      console.warn("Picks data corrupted, resetting.", e);
+      picks = {};
+    }
+  }
+
+  function saveSchedule() {
+    try { localStorage.setItem(LS_SCHEDULE, JSON.stringify(schedule)); }
+    catch (e) { console.warn("Could not save schedule.", e); toast("Storage unavailable"); }
+  }
+  function savePicks() {
+    try { localStorage.setItem(LS_PICKS, JSON.stringify(picks)); }
+    catch (e) { console.warn("Could not save picks.", e); }
+  }
+
+  /* =================================================================
+     HELPERS
+     ================================================================= */
+  // Sort bands ascending by time string ("HH:MM"). Blank times last.
+  function sortStage(stage) {
+    schedule[stage].sort((a, b) => {
+      const ta = a.time || "99:99";
+      const tb = b.time || "99:99";
+      return ta.localeCompare(tb);
+    });
+  }
+
+  function findBand(id) {
+    for (const stage of STAGES) {
+      const idx = schedule[stage].findIndex(b => b.id === id);
+      if (idx !== -1) return { stage, idx, band: schedule[stage][idx] };
+    }
+    return null;
+  }
+
+  // Escape user text before injecting into innerHTML.
+  function esc(str) {
+    return String(str).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  /* =================================================================
+     RENDERING
+     ================================================================= */
+  function renderTabs() {
+    const tabs = document.getElementById("tabs");
+    tabs.innerHTML = "";
+    STAGES.forEach((stage, i) => {
+      const b = document.createElement("button");
+      b.className = "tab " + STAGE_TYPE[stage] + (i === currentStageIndex ? " current" : "");
+      b.textContent = stage;
+      b.addEventListener("click", () => goToStage(i));
+      tabs.appendChild(b);
+    });
+  }
+
+  function renderStages() {
+    const wrap = document.getElementById("carousel");
+    wrap.innerHTML = "";
+    STAGES.forEach(stage => {
+      const type = STAGE_TYPE[stage];
+      const section = document.createElement("section");
+      section.className = "stage " + (type === "main" ? "main-stage" : "secondary-stage");
+      section.dataset.stage = stage;
+
+      sortStage(stage);
+      const bands = schedule[stage];
+      const badgeLabel = type === "main" ? "MAIN STAGE" : "SECONDARY STAGE";
+
+      let rows = "";
+      if (bands.length === 0) {
+        rows = `<div class="empty"><span class="skull">&#128128;</span>No bands yet on this stage.<br/>Tap + to add one.</div>`;
+      } else {
+        rows = bands.map(b => bandRow(b)).join("");
+      }
+
+      section.innerHTML = `
+        <div class="stage-head">
+          <span class="badge ${type}">${badgeLabel}</span>
+          <h2>${esc(stage)}</h2>
+          <div class="count">${bands.length} band${bands.length === 1 ? "" : "s"} scheduled</div>
+        </div>
+        <div class="timeline">${rows}</div>
+      `;
+      wrap.appendChild(section);
+    });
+
+    // Wire up row buttons (event delegation kept simple per-row)
+    wrap.querySelectorAll("[data-edit]").forEach(el =>
+      el.addEventListener("click", () => openSheet(el.getAttribute("data-edit"))));
+    wrap.querySelectorAll("[data-star]").forEach(el =>
+      el.addEventListener("click", () => toggleStar(el.getAttribute("data-star"))));
+  }
+
+  function bandRow(b) {
+    const starred = !!picks[b.id];
+    const time = b.time || "--:--";
+    return `
+      <div class="band ${starred ? "starred" : ""}">
+        <div class="time">${esc(time)}<small>Start</small></div>
+        <div class="body">
+          <div class="name">${esc(b.name)}</div>
+          ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
+        </div>
+        <div class="actions">
+          <button class="mini star ${starred ? "on" : ""}" data-star="${b.id}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
+          <button class="mini" data-edit="${b.id}" aria-label="Edit">&#9998;</button>
+        </div>
+      </div>`;
+  }
+
+  /* =================================================================
+     NAVIGATION between stages
+     ================================================================= */
+  function goToStage(i) {
+    currentStageIndex = i;
+    const carousel = document.getElementById("carousel");
+    const sections = carousel.querySelectorAll("section.stage");
+    if (sections[i]) carousel.scrollTo({ left: sections[i].offsetLeft, behavior: "smooth" });
+    setActiveTab(i);
+  }
+
+  function setActiveTab(i) {
+    document.querySelectorAll("#tabs .tab").forEach((t, idx) =>
+      t.classList.toggle("current", idx === i));
+  }
+
+  // Keep tabs in sync while the user swipes the carousel.
+  function watchScroll() {
+    const carousel = document.getElementById("carousel");
+    let raf = null;
+    carousel.addEventListener("scroll", () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        const i = Math.round(carousel.scrollLeft / carousel.clientWidth);
+        if (i !== currentStageIndex && i >= 0 && i < STAGES.length) {
+          currentStageIndex = i;
+          setActiveTab(i);
+        }
+      });
+    });
+  }
+
+  /* =================================================================
+     ADD / EDIT SHEET
+     ================================================================= */
+  const overlay = document.getElementById("overlay");
+  const form = document.getElementById("bandForm");
+
+  function fillStageSelect(selected) {
+    const sel = document.getElementById("iStage");
+    sel.innerHTML = STAGES.map(s =>
+      `<option value="${esc(s)}" ${s === selected ? "selected" : ""}>${esc(s)} (${STAGE_TYPE[s] === "main" ? "Main" : "Secondary"})</option>`
+    ).join("");
+  }
+
+  // editId === null -> add mode; otherwise edit existing band.
+  function openSheet(editId) {
+    clearErrors();
+    if (editId) {
+      const found = findBand(editId);
+      if (!found) return;
+      document.getElementById("sheetTitle").textContent = "Edit Band";
+      document.getElementById("bandId").value = found.band.id;
+      document.getElementById("iName").value = found.band.name;
+      document.getElementById("iTime").value = found.band.time;
+      document.getElementById("iNotes").value = found.band.notes;
+      fillStageSelect(found.stage);
+      document.getElementById("deleteRow").classList.remove("hidden");
+    } else {
+      document.getElementById("sheetTitle").textContent = "Add Band";
+      form.reset();
+      document.getElementById("bandId").value = "";
+      fillStageSelect(STAGES[currentStageIndex]);
+      document.getElementById("deleteRow").classList.add("hidden");
+    }
+    overlay.classList.add("open");
+  }
+
+  function closeSheet() {
+    overlay.classList.remove("open");
+  }
+
+  function clearErrors() {
+    ["f-name", "f-time"].forEach(id => document.getElementById(id).classList.remove("invalid"));
+  }
+
+  function submitForm(e) {
+    e.preventDefault();
+    clearErrors();
+
+    const id = document.getElementById("bandId").value;
+    const name = document.getElementById("iName").value.trim();
+    const time = document.getElementById("iTime").value.trim();
+    const notes = document.getElementById("iNotes").value.trim();
+    const stage = document.getElementById("iStage").value;
+
+    // Validation: name + time required.
+    let ok = true;
+    if (!name) { document.getElementById("f-name").classList.add("invalid"); ok = false; }
+    if (!time) { document.getElementById("f-time").classList.add("invalid"); ok = false; }
+    if (!ok) return;
+
+    if (id) {
+      // EDIT — possibly move between stages.
+      const found = findBand(id);
+      if (found) {
+        const updated = { id, name, time, notes };
+        if (found.stage !== stage) {
+          schedule[found.stage].splice(found.idx, 1); // remove from old stage
+          schedule[stage].push(updated);              // add to new stage
+        } else {
+          schedule[found.stage][found.idx] = updated;
+        }
+      }
+      toast("Band updated");
+    } else {
+      // ADD
+      schedule[stage].push({ id: uid(), name, time, notes });
+      toast("Band added");
+    }
+
+    sortStage(stage);
+    saveSchedule();
+    renderStages();
+    // Jump to the stage the band ended up on.
+    const targetIndex = STAGES.indexOf(stage);
+    if (targetIndex !== -1) goToStage(targetIndex);
+    closeSheet();
+    if (!document.getElementById("panel").classList.contains("open")) {} // no-op
+    refreshPanelIfOpen();
+  }
+
+  function deleteCurrent() {
+    const id = document.getElementById("bandId").value;
+    if (!id) return;
+    const found = findBand(id);
+    if (found) {
+      schedule[found.stage].splice(found.idx, 1);
+      delete picks[id];
+      saveSchedule();
+      savePicks();
+      renderStages();
+      toast("Band deleted");
+    }
+    closeSheet();
+    refreshPanelIfOpen();
+  }
+
+  /* =================================================================
+     STARS / MY PICKS
+     ================================================================= */
+  function toggleStar(id) {
+    if (picks[id]) delete picks[id];
+    else picks[id] = true;
+    savePicks();
+    renderStages();
+    refreshPanelIfOpen();
+  }
+
+  /* =================================================================
+     SEARCH / PICKS PANEL
+     ================================================================= */
+  const panel = document.getElementById("panel");
+
+  function openPanel(mode) {
+    panelMode = mode;
+    document.getElementById("panelTitle").textContent = mode === "picks" ? "My Picks" : "Search";
+    document.querySelectorAll("#panelSeg button").forEach(b =>
+      b.classList.toggle("on", b.dataset.mode === mode));
+    panel.classList.add("open");
+    renderResults();
+    if (mode === "all") setTimeout(() => document.getElementById("searchInput").focus(), 250);
+  }
+
+  function closePanel() {
+    panel.classList.remove("open");
+  }
+
+  function refreshPanelIfOpen() {
+    if (panel.classList.contains("open")) renderResults();
+  }
+
+  // Build a flat, time-sorted list of all bands for search / picks.
+  function allBandsFlat() {
+    const list = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => list.push({ ...b, stage })));
+    list.sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+    return list;
+  }
+
+  function renderResults() {
+    const q = document.getElementById("searchInput").value.trim().toLowerCase();
+    const out = document.getElementById("results");
+    let list = allBandsFlat();
+
+    if (panelMode === "picks") list = list.filter(b => picks[b.id]);
+    if (q) list = list.filter(b =>
+      b.name.toLowerCase().includes(q) ||
+      b.stage.toLowerCase().includes(q) ||
+      (b.notes || "").toLowerCase().includes(q));
+
+    if (list.length === 0) {
+      const msg = panelMode === "picks"
+        ? "No starred bands yet.<br/>Tap the &#9734; on any band to add it here."
+        : "No bands match your search.";
+      out.innerHTML = `<div class="empty"><span class="skull">&#128128;</span>${msg}</div>`;
+      return;
+    }
+
+    out.innerHTML = list.map(b => {
+      const starred = !!picks[b.id];
+      return `
+        <div class="result" data-open="${b.id}">
+          <div class="r-time">${esc(b.time || "--:--")}</div>
+          <div class="r-body">
+            <div class="r-name">${esc(b.name)}</div>
+            <div class="r-stage">${esc(b.stage)} &middot; ${STAGE_TYPE[b.stage] === "main" ? "Main" : "Secondary"}</div>
+          </div>
+          <button class="r-star ${starred ? "on" : ""}" data-pickstar="${b.id}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
+        </div>`;
+    }).join("");
+
+    // Tap result -> jump to its stage + open editor. Tap star -> toggle.
+    out.querySelectorAll("[data-open]").forEach(el => el.addEventListener("click", () => {
+      const id = el.getAttribute("data-open");
+      const found = findBand(id);
+      if (found) {
+        closePanel();
+        goToStage(STAGES.indexOf(found.stage));
+        openSheet(id);
+      }
+    }));
+    out.querySelectorAll("[data-pickstar]").forEach(el => el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      toggleStar(el.getAttribute("data-pickstar"));
+    }));
+  }
+
+  /* =================================================================
+     RESET
+     ================================================================= */
+  function resetData() {
+    if (!confirm("Reset to the default example schedule? Your changes and picks will be lost.")) return;
+    schedule = defaultSchedule();
+    picks = {};
+    saveSchedule();
+    savePicks();
+    renderStages();
+    goToStage(0);
+    refreshPanelIfOpen();
+    toast("Reset to defaults");
+  }
+
+  /* =================================================================
+     TOAST
+     ================================================================= */
+  let toastTimer = null;
+  function toast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+  }
+
+  /* =================================================================
+     EVENT WIRING + INIT
+     ================================================================= */
+  function init() {
+    loadSchedule();
+    loadPicks();
+    renderTabs();
+    renderStages();
+    watchScroll();
+
+    document.getElementById("fab").addEventListener("click", () => openSheet(null));
+    document.getElementById("cancelBtn").addEventListener("click", closeSheet);
+    document.getElementById("deleteBtn").addEventListener("click", deleteCurrent);
+    form.addEventListener("submit", submitForm);
+
+    // Close sheet when tapping the dimmed backdrop.
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeSheet(); });
+
+    document.getElementById("btnReset").addEventListener("click", resetData);
+    document.getElementById("btnSearch").addEventListener("click", () => openPanel("all"));
+    document.getElementById("btnPicks").addEventListener("click", () => openPanel("picks"));
+    document.getElementById("panelClose").addEventListener("click", closePanel);
+    document.getElementById("searchInput").addEventListener("input", renderResults);
+    document.querySelectorAll("#panelSeg button").forEach(b =>
+      b.addEventListener("click", () => openPanel(b.dataset.mode)));
+
+    // Escape key closes overlays (handy when testing on desktop).
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { closeSheet(); closePanel(); }
+    });
+
+    setActiveTab(0);
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
