@@ -132,6 +132,65 @@
     .icon-btn:active { transform: scale(0.94); }
     .icon-btn.active { border-color: var(--star); color: var(--star); }
 
+    /* ============================================================
+       HAMBURGER MENU
+       ============================================================ */
+    .icon-btn#btnMenu { font-size: 22px; }
+
+    .menu-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      background: rgba(0,0,0,0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s;
+    }
+    .menu-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .menu {
+      position: absolute;
+      top: calc(var(--safe-top) + 8px);
+      right: 12px;
+      min-width: 220px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 8px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+      transform: translateY(-8px) scale(0.97);
+      opacity: 0;
+      transition: transform .18s ease, opacity .18s ease;
+    }
+    .menu-overlay.open .menu { transform: translateY(0) scale(1); opacity: 1; }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: var(--ink);
+      padding: 14px 12px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .menu-item:active { background: var(--bg-card); }
+    .menu-item .mi-ico {
+      font-size: 18px;
+      width: 24px;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .menu-item.danger { color: var(--accent-2); }
+    .menu-item.danger .mi-ico { color: var(--accent-2); }
+    .menu-item + .menu-item { border-top: 1px solid var(--line); }
+
     /* Stage tab strip */
     nav.stages {
       display: flex;
@@ -698,14 +757,31 @@
         <div class="sub">Personal Stage Schedule</div>
       </div>
       <div class="tools">
-        <button class="icon-btn" id="btnPicks" title="My Picks" aria-label="My Picks">&#9733;</button>
-        <button class="icon-btn" id="btnSearch" title="Search" aria-label="Search">&#128269;</button>
-        <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings">&#9881;</button>
-        <button class="icon-btn" id="btnReset" title="Reset to rollback point" aria-label="Reset">&#8634;</button>
+        <button class="icon-btn" id="btnMenu" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">&#9776;</button>
       </div>
     </div>
     <nav class="stages" id="tabs"><!-- tabs injected by JS --></nav>
   </header>
+
+  <!-- ============================================================
+       HAMBURGER MENU (holds Picks / Search / Settings / Reset)
+       ============================================================ -->
+  <div class="menu-overlay" id="menuOverlay">
+    <div class="menu" role="menu" aria-label="Main menu">
+      <button class="menu-item" id="btnPicks" role="menuitem">
+        <span class="mi-ico">&#9733;</span> My Picks
+      </button>
+      <button class="menu-item" id="btnSearch" role="menuitem">
+        <span class="mi-ico">&#128269;</span> Search
+      </button>
+      <button class="menu-item" id="btnSettings" role="menuitem">
+        <span class="mi-ico">&#9881;</span> Settings
+      </button>
+      <button class="menu-item danger" id="btnReset" role="menuitem">
+        <span class="mi-ico">&#8634;</span> Reset / Roll back
+      </button>
+    </div>
+  </div>
 
   <!-- ============================================================
        STAGE CAROUSEL
@@ -1622,6 +1698,19 @@
     // Close sheet when tapping the dimmed backdrop.
     overlay.addEventListener("click", (e) => { if (e.target === overlay) closeSheet(); });
 
+    // Hamburger menu — holds Picks / Search / Settings / Reset.
+    const menuOverlay = document.getElementById("menuOverlay");
+    const btnMenu = document.getElementById("btnMenu");
+    const openMenu = () => { menuOverlay.classList.add("open"); btnMenu.setAttribute("aria-expanded", "true"); };
+    const closeMenu = () => { menuOverlay.classList.remove("open"); btnMenu.setAttribute("aria-expanded", "false"); };
+    btnMenu.addEventListener("click", () => {
+      menuOverlay.classList.contains("open") ? closeMenu() : openMenu();
+    });
+    menuOverlay.addEventListener("click", (e) => { if (e.target === menuOverlay) closeMenu(); });
+    // Every menu item closes the menu before running its action.
+    menuOverlay.querySelectorAll(".menu-item").forEach(el =>
+      el.addEventListener("click", closeMenu));
+
     document.getElementById("btnReset").addEventListener("click", resetData);
     document.getElementById("btnSearch").addEventListener("click", () => openPanel("all"));
     document.getElementById("btnPicks").addEventListener("click", () => openPanel("picks"));
@@ -1644,6 +1733,7 @@
       if (e.key === "Escape") {
         // Dialog takes priority — cancel it instead of closing everything.
         if (dialogResolver) { document.getElementById("dlgCancel").click(); return; }
+        closeMenu();
         closeSheet();
         closePanel();
         closeSettings();
