@@ -28,6 +28,6 @@ All application logic lives in a single `index.html` (vanilla HTML/CSS/JS, no fr
 - Add / edit / delete bands via a bottom-sheet form (name + date + start time required); bands auto-sort by date+time.
 - Mark shows as ended (✓) manually — overrides the automatic clock-based status.
 - Search across all stages and a starred **My Picks** view.
-- Settings: hide the reset button, configure reminders, and define a custom rollback point.
+- Settings: hide the reset button, configure reminders, switch layout (swipe vs stacked), export/import the schedule as JSON, and define a custom rollback point.
 - Multi-step custom confirmation dialogs (no native `alert`/`confirm`).
 - All data saved instantly to `localStorage`; resilient to empty/corrupt storage.

@@ -361,6 +361,24 @@
       -webkit-overflow-scrolling: touch;
     }
 
+    /* Stacked layout — all stages in one vertical scroll */
+    main.stacked {
+      flex-direction: column;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scroll-snap-type: y proximity;
+    }
+    main.stacked section.stage {
+      flex: 0 0 auto;
+      width: 100%;
+      overflow-y: visible;
+      padding-bottom: 24px;
+      scroll-snap-align: start;
+    }
+    main.stacked section.stage:last-child {
+      padding-bottom: calc(120px + var(--safe-bottom));
+    }
+
     /* Stage header card */
     .stage-head {
       position: relative;
@@ -1088,6 +1106,26 @@
         <p class="settings-note small">Reminders fire while the app is open. On iOS, add the app to your Home Screen and allow notifications when asked.</p>
       </div>
 
+      <!-- Layout + data import/export -->
+      <div class="settings-group">
+        <div class="settings-label">Layout &amp; Data</div>
+        <label class="toggle-row" for="setLayout" style="cursor:default">
+          <span>
+            Stage layout
+            <small>Swipe between stages or scroll them stacked.</small>
+          </span>
+          <select id="setLayout" class="lead-select">
+            <option value="swipe">Swipe</option>
+            <option value="stack">Stacked</option>
+          </select>
+        </label>
+        <div class="settings-divider"></div>
+        <button type="button" class="btn btn-ghost" id="exportBtn">&#11015; Export schedule (.json)</button>
+        <button type="button" class="btn btn-ghost" id="importBtn">&#11014; Import schedule (.json)</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden />
+        <p class="settings-note small">Export backs up every band, star and ended mark. Import replaces your current schedule.</p>
+      </div>
+
       <!-- Rollback configuration -->
       <div class="settings-group danger-group">
         <div class="settings-label">Rollback Point</div>
@@ -1209,7 +1247,7 @@
   let currentStageIndex = 0;
   let panelMode = "all";   // "all" | "picks"
 
-  const DEFAULT_SETTINGS = { showReset: true, notifications: false, notifyLead: 25 };
+  const DEFAULT_SETTINGS = { showReset: true, notifications: false, notifyLead: 25, layout: "swipe" };
   let notified = new Set();   // keys of shows we've already reminded about
 
   /* =================================================================
@@ -1585,9 +1623,7 @@
       lastEndedSig = sig;
       const idx = currentStageIndex;
       renderStages();              // also refreshes the banner
-      const carousel = document.getElementById("carousel");
-      const sections = carousel.querySelectorAll("section.stage");
-      if (sections[idx]) carousel.scrollLeft = sections[idx].offsetLeft;
+      scrollToStage(idx, false);   // preserve position after re-render
     } else {
       updateNextUp();
     }
@@ -1732,11 +1768,23 @@
   /* =================================================================
      NAVIGATION between stages
      ================================================================= */
-  function goToStage(i) {
-    currentStageIndex = i;
+  // Scroll a stage into view, honoring the current layout (horizontal
+  // swipe vs vertical stack).
+  function scrollToStage(i, smooth) {
     const carousel = document.getElementById("carousel");
     const sections = carousel.querySelectorAll("section.stage");
-    if (sections[i]) carousel.scrollTo({ left: sections[i].offsetLeft, behavior: "smooth" });
+    if (!sections[i]) return;
+    const behavior = smooth ? "smooth" : "auto";
+    if (settings.layout === "stack") {
+      carousel.scrollTo({ top: sections[i].offsetTop, behavior });
+    } else {
+      carousel.scrollTo({ left: sections[i].offsetLeft, behavior });
+    }
+  }
+
+  function goToStage(i) {
+    currentStageIndex = i;
+    scrollToStage(i, true);
     setActiveTab(i);
   }
 
@@ -1745,7 +1793,20 @@
       t.classList.toggle("current", idx === i));
   }
 
-  // Keep tabs in sync while the user swipes the carousel.
+  // Index of the stage currently in view (works for both layouts).
+  function currentScrollIndex() {
+    const carousel = document.getElementById("carousel");
+    const sections = carousel.querySelectorAll("section.stage");
+    if (settings.layout === "stack") {
+      const st = carousel.scrollTop;
+      let idx = 0;
+      sections.forEach((s, k) => { if (s.offsetTop <= st + 90) idx = k; });
+      return idx;
+    }
+    return Math.round(carousel.scrollLeft / carousel.clientWidth);
+  }
+
+  // Keep the active tab in sync while the user scrolls/swipes.
   function watchScroll() {
     const carousel = document.getElementById("carousel");
     let raf = null;
@@ -1753,7 +1814,7 @@
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = null;
-        const i = Math.round(carousel.scrollLeft / carousel.clientWidth);
+        const i = currentScrollIndex();
         if (i !== currentStageIndex && i >= 0 && i < STAGES.length) {
           currentStageIndex = i;
           setActiveTab(i);
@@ -2070,6 +2131,84 @@
   function applySettings() {
     // Show / hide the top-bar reset button per user preference.
     document.getElementById("btnReset").classList.toggle("hidden", !settings.showReset);
+    applyLayout();
+  }
+
+  function applyLayout() {
+    document.getElementById("carousel").classList.toggle("stacked", settings.layout === "stack");
+  }
+
+  function changeLayout(e) {
+    settings.layout = e.target.value === "stack" ? "stack" : "swipe";
+    saveSettings();
+    applyLayout();
+    // Re-anchor to the current stage in the new layout.
+    requestAnimationFrame(() => scrollToStage(currentStageIndex, false));
+    toast("Layout: " + (settings.layout === "stack" ? "Stacked" : "Swipe"));
+  }
+
+  /* =================================================================
+     EXPORT / IMPORT — JSON backup of the full configuration.
+     ================================================================= */
+  function exportConfig() {
+    const data = {
+      app: "brutal-assault",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      schedule, picks, ended
+    };
+    try {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "brutal-assault-" + todayStr() + ".json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("Schedule exported");
+    } catch (e) {
+      console.warn("Export failed", e);
+      showAlert("Export failed", "Could not generate the export file on this device.");
+    }
+  }
+
+  async function importConfigFile(file) {
+    if (!file) return;
+    let data;
+    try {
+      data = JSON.parse(await file.text());
+    } catch (e) {
+      showAlert("Import failed", "That file isn't valid JSON. Use a file exported from this app.");
+      return;
+    }
+    // Accept either a wrapped export or a raw schedule object.
+    const clean = sanitizeSchedule(data && data.schedule ? data.schedule : data);
+    if (!clean) {
+      showAlert("Import failed", "No valid schedule was found in that file.");
+      return;
+    }
+    const n = STAGES.reduce((c, s) => c + clean[s].length, 0);
+    const ok = await showDialog({
+      title: "Import schedule?",
+      message: `Replace your current schedule with the imported one (<b>${n} bands</b>)?<br><br>Your current data will be overwritten.`,
+      icon: "&#128229;",
+      danger: true,
+      confirmText: "Import",
+      cancelText: "Cancel"
+    });
+    if (!ok) return;
+
+    schedule = clean;
+    picks = (data && data.picks && typeof data.picks === "object" && !Array.isArray(data.picks)) ? data.picks : {};
+    ended = (data && data.ended && typeof data.ended === "object" && !Array.isArray(data.ended)) ? data.ended : {};
+    saveSchedule(); savePicks(); saveEnded();
+    renderStages();
+    goToStage(0);
+    refreshPanelIfOpen();
+    renderSettings();
+    toast("Schedule imported (" + n + " bands)");
   }
 
   function renderSettings() {
@@ -2077,6 +2216,7 @@
     document.getElementById("setNotify").checked =
       !!settings.notifications && ("Notification" in window) && Notification.permission === "granted";
     document.getElementById("setLead").value = String(settings.notifyLead || 25);
+    document.getElementById("setLayout").value = settings.layout === "stack" ? "stack" : "swipe";
     const status = document.getElementById("rollbackStatus");
     if (rollback) {
       const n = STAGES.reduce((c, s) => c + (rollback.schedule[s] ? rollback.schedule[s].length : 0), 0);
@@ -2379,6 +2519,14 @@
     document.getElementById("setShowReset").addEventListener("change", toggleShowReset);
     document.getElementById("setNotify").addEventListener("change", toggleNotifications);
     document.getElementById("setLead").addEventListener("change", changeNotifyLead);
+    document.getElementById("setLayout").addEventListener("change", changeLayout);
+    document.getElementById("exportBtn").addEventListener("click", exportConfig);
+    document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
+    document.getElementById("importFile").addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0];
+      importConfigFile(f);
+      e.target.value = "";   // allow re-importing the same file
+    });
     document.getElementById("saveRollbackBtn").addEventListener("click", saveRollback);
     document.getElementById("clearRollbackBtn").addEventListener("click", clearRollback);
     document.getElementById("doResetBtn").addEventListener("click", resetData);
