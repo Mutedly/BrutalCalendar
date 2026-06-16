@@ -1099,8 +1099,8 @@
           </select>
         </label>
         <div class="settings-divider"></div>
-        <button type="button" class="btn btn-primary" id="calBtn">&#128197; Add entire schedule to calendar</button>
-        <p class="settings-note small">Downloads a calendar file (.ics) with every band; your phone's calendar then sends the reminders. After editing a band, add the file again to update events (live auto-sync would require a hosted calendar subscription).</p>
+        <button type="button" class="btn btn-primary" id="calBtn">&#128197; Export to Calendar</button>
+        <p class="settings-note small">Exports the entire schedule (every band). On iPhone this opens the share sheet so you can add all events straight to iOS Calendar — your calendar then sends the reminders.</p>
       </div>
 
       <!-- Layout + data import/export -->
@@ -2312,7 +2312,7 @@
     return seq;
   }
 
-  function buildICS() {
+  function buildICS(onlyPicks) {
     const lead = settings.notifyLead || 25;
     const seq = nextIcsSequence();
     const stamp = icsUTC(Date.now());
@@ -2322,9 +2322,10 @@
       "PRODID:-//Brutal Assault//Schedule//EN",
       "CALSCALE:GREGORIAN",
       "METHOD:PUBLISH",
-      "X-WR-CALNAME:Brutal Assault"
+      "X-WR-CALNAME:Brutal Assault" + (onlyPicks ? " (My Picks)" : "")
     ];
     STAGES.forEach(stage => schedule[stage].forEach(b => {
+      if (onlyPicks && !picks[b.id]) return;  // picks-only filter
       const s = startMs(b);
       if (s === null) return;                 // need a valid date+time
       const e = endMs(b) || (s + 60 * 60000); // default 1h if no end
@@ -2348,20 +2349,56 @@
     return lines.map(icsFold).join("\r\n");
   }
 
-  function exportCalendar() {
-    const count = STAGES.reduce((c, s) => c + schedule[s].filter(b => startMs(b) !== null).length, 0);
-    if (count === 0) { showAlert("Nothing to add", "There are no dated shows to add to your calendar yet."); return; }
+  // Export the ENTIRE schedule (every band). One-tap on iPhone via the
+  // Web Share sheet, with sensible fallbacks elsewhere.
+  async function exportCalendar() {
+    const count = STAGES.reduce((c, s) =>
+      c + schedule[s].filter(b => startMs(b) !== null).length, 0);
+    if (count === 0) {
+      showAlert("Nothing to add", "There are no dated shows to add to your calendar yet.");
+      return;
+    }
+    const ics = buildICS(false);
+    const filename = "brutal-assault-" + todayStr() + ".ics";
+    await shareOrDownloadICS(ics, filename, count);
+  }
+
+  // Prefer the native share sheet (best one-tap iOS Calendar flow); then
+  // an iOS data-URL open; then a normal file download.
+  async function shareOrDownloadICS(ics, filename, count) {
+    let file = null;
+    try { file = new File([ics], filename, { type: "text/calendar" }); } catch (e) { /* older browsers */ }
+
+    // 1) Native share with a file attachment (iOS 15+, Android Chrome).
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "Brutal Assault — Schedule" });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return;   // user dismissed the sheet
+        // any other error -> fall through to the next method
+      }
+    }
+
+    // 2) iOS without file-share support: open the .ics so Calendar can grab it.
+    const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent || "") ||
+      (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1);
+    if (isIOS) {
+      window.location.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
+      return;
+    }
+
+    // 3) Desktop / Android fallback: download the file.
     try {
-      const blob = new Blob([buildICS()], { type: "text/calendar;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
       const a = document.createElement("a");
       a.href = url;
-      a.download = "brutal-assault-" + todayStr() + ".ics";
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast(count + " shows sent to calendar");
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      toast((count || 0) + " shows exported");
     } catch (err) {
       console.warn("Calendar export failed", err);
       showAlert("Export failed", "Could not generate the calendar file on this device.");
