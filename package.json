@@ -1,0 +1,28 @@
+{
+  "name": "penguin-world",
+  "version": "1.0.0",
+  "description": "A small browser-based 2D virtual world MVP (register, login, shared room, real-time movement & chat).",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "init-db": "node server/scripts/initDb.js"
+  },
+  "keywords": [
+    "virtual-world",
+    "game",
+    "socket.io",
+    "express",
+    "mysql"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.0",
+    "socket.io": "^4.7.5"
+  }
+}

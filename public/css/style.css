@@ -1,0 +1,281 @@
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+:root {
+  --bg: #0e1a2b;
+  --panel: #ffffff;
+  --ink: #1c2b3a;
+  --muted: #6b7c8f;
+  --primary: #2d8cff;
+  --primary-dark: #1f6fd6;
+  --accent: #ffd33d;
+  --danger: #e74c3c;
+  --radius: 14px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: 'Nunito', system-ui, sans-serif;
+  color: var(--ink);
+  background: radial-gradient(circle at 50% -10%, #1c3b63 0%, #0e1a2b 60%);
+}
+
+.logo {
+  font-family: 'Baloo 2', cursive;
+  color: var(--primary);
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Screens                                                             */
+/* ------------------------------------------------------------------ */
+.screen {
+  display: none;
+  min-height: 100vh;
+}
+.screen.active {
+  display: flex;
+}
+
+.screen--auth {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Auth cards                                                          */
+/* ------------------------------------------------------------------ */
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 32px 28px;
+  text-align: center;
+}
+
+.auth-card .logo {
+  font-size: 30px;
+}
+
+.tagline {
+  color: var(--muted);
+  margin: 6px 0 22px;
+  font-size: 14px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+
+.auth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.auth-form input[type='text'],
+.auth-form input[type='password'] {
+  padding: 11px 12px;
+  border: 2px solid #e3e9f0;
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.auth-form input[type='text']:focus,
+.auth-form input[type='password']:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-row input[type='color'] {
+  width: 48px;
+  height: 36px;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.color-preview {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #3498db;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
+}
+
+/* ------------------------------------------------------------------ */
+/* Buttons                                                             */
+/* ------------------------------------------------------------------ */
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.05s ease, background 0.15s ease;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn--primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn--primary:hover {
+  background: var(--primary-dark);
+}
+
+.btn--ghost {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.switch {
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.switch a {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: 13px;
+  min-height: 16px;
+  margin: 2px 0 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Game screen                                                         */
+/* ------------------------------------------------------------------ */
+.screen--game {
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.game-topbar {
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  color: #fff;
+}
+
+.logo--small {
+  font-size: 22px;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.online-pill,
+.me-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.online-pill .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #38d39f;
+  box-shadow: 0 0 8px #38d39f;
+}
+
+.stage-wrap {
+  width: 100%;
+  max-width: 1000px;
+  padding: 0 20px;
+}
+
+#game-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #bfe3ff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  aspect-ratio: 960 / 540;
+}
+
+.chat-bar {
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px 26px;
+}
+
+#chat-input {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  font-size: 15px;
+  font-family: inherit;
+}
+#chat-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.chat-hint {
+  color: var(--accent);
+  font-size: 13px;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .game-topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
