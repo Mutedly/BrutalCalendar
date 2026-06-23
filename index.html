@@ -1384,7 +1384,10 @@
       clean[stage] = arr
         .filter(b => b && typeof b === "object")
         .map(b => ({
-          id: typeof b.id === "string" && b.id ? b.id : uid(),
+          // Only accept ids made of safe characters; otherwise regenerate.
+          // Prevents imported ids from breaking out of HTML attributes / CSS
+          // selectors (defense in depth alongside escaping at render time).
+          id: (typeof b.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(b.id)) ? b.id : uid(),
           name: typeof b.name === "string" ? b.name : "",
           date: typeof b.date === "string" ? b.date : "",
           time: typeof b.time === "string" ? b.time : "",
@@ -1771,7 +1774,7 @@
     listEl.innerHTML = items.map(g => {
       const starred = !!picks[g.band.id];
       return `
-        <div class="slot-item" data-slot="${g.band.id}">
+        <div class="slot-item" data-slot="${esc(g.band.id)}">
           <div class="s-time">${esc(g.band.time || "--:--")}${g.band.end ? " &#8594; " + esc(g.band.end) : ""}</div>
           <div class="s-body">
             <div class="s-name">${esc(g.band.name)}</div>
@@ -1833,7 +1836,7 @@
     listEl.innerHTML = pairs.map(([A, B]) => {
       const ds = fmtDateShort(A.band.date);
       return `
-        <div class="slot-item" data-slot="${A.band.id}">
+        <div class="slot-item" data-slot="${esc(A.band.id)}">
           <div class="s-body">
             <div class="s-name">${esc(A.band.name)} <span class="vs">&#8644;</span> ${esc(B.band.name)}</div>
             <div class="s-stage">${ds ? esc(ds) + " &middot; " : ""}${esc(A.band.time || "")}–${esc(A.band.end || "?")} ${esc(A.stage)} &nbsp;vs&nbsp; ${esc(B.band.time || "")}–${esc(B.band.end || "?")} ${esc(B.stage)}</div>
@@ -2019,7 +2022,7 @@
     const metaLine = b.end ? `<div class="endtime">&#8594; ends ${esc(b.end)}</div>` : "";
     const clashes = overlapMap[b.id];
     const overlapBadge = clashes && clashes.length
-      ? `<button class="overlap-badge" data-overlap="${b.id}" aria-label="Show overlapping shows">&#9888; Overlap (${clashes.length})</button>`
+      ? `<button class="overlap-badge" data-overlap="${esc(b.id)}" aria-label="Show overlapping shows">&#9888; Overlap (${clashes.length})</button>`
       : "";
     return `
       <div class="band ${starred ? "starred" : ""} ${finished ? "ended" : ""} ${cls === "active" ? "live" : ""} ${clashes && clashes.length ? "has-overlap" : ""}">
@@ -2031,9 +2034,9 @@
           ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
         </div>
         <div class="actions">
-          <button class="mini star ${starred ? "on" : ""}" data-star="${b.id}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
-          <button class="mini check ${finished ? "on" : ""}" data-end="${b.id}" aria-label="Mark as ended">&#10003;</button>
-          <button class="mini" data-edit="${b.id}" aria-label="Edit">&#9998;</button>
+          <button class="mini star ${starred ? "on" : ""}" data-star="${esc(b.id)}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
+          <button class="mini check ${finished ? "on" : ""}" data-end="${esc(b.id)}" aria-label="Mark as ended">&#10003;</button>
+          <button class="mini" data-edit="${esc(b.id)}" aria-label="Edit">&#9998;</button>
         </div>
       </div>`;
   }
@@ -2304,13 +2307,13 @@
     out.innerHTML = list.map(b => {
       const starred = !!picks[b.id];
       return `
-        <div class="result" data-open="${b.id}">
+        <div class="result" data-open="${esc(b.id)}">
           <div class="r-time">${esc(b.time || "--:--")}</div>
           <div class="r-body">
             <div class="r-name">${esc(b.name)}</div>
             <div class="r-stage">${fmtDateShort(b.date) ? esc(fmtDateShort(b.date)) + " &middot; " : ""}${esc(b.stage)} &middot; ${STAGE_TYPE[b.stage] === "main" ? "Main" : "Secondary"}</div>
           </div>
-          <button class="r-star ${starred ? "on" : ""}" data-pickstar="${b.id}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
+          <button class="r-star ${starred ? "on" : ""}" data-pickstar="${esc(b.id)}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
         </div>`;
     }).join("");
 
