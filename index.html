@@ -1,0 +1,2963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
+
+  <!-- PWA-friendly meta tags (single-file, no external manifest/service-worker) -->
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="description" content="Brutal Assault festival band schedule — carry it offline on your phone." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Brutal Assault" />
+  <meta name="color-scheme" content="dark" />
+
+  <!-- Inline favicon so we never hit the network -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230a0a0a'/><text x='50' y='72' font-size='70' text-anchor='middle' fill='%23e11d1d' font-family='monospace'>BA</text></svg>" />
+
+  <!-- Real PWA wiring (manifest + installable icons) -->
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+
+  <title>Brutal Assault — Schedule</title>
+
+  <style>
+    /* ============================================================
+       THEME / DESIGN TOKENS
+       Dark brutal metal festival aesthetic, high contrast.
+       ============================================================ */
+    :root {
+      --bg: #0a0a0a;
+      --bg-2: #141414;
+      --bg-card: #181818;
+      --bg-card-2: #161616;
+      --ink: #f4f4f4;
+      --ink-dim: #a9a9a9;
+      --ink-faint: #6a6a6a;
+      --line: #2a2a2a;
+      --accent: #e11d1d;          /* blood red */
+      --accent-2: #ff3b3b;
+      --gold: #d9a441;            /* secondary stage accent */
+      --star: #ffcc33;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --nav-h: 116px;
+      /* System font stack only — no external fonts allowed */
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font);
+      overscroll-behavior: none;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Subtle metallic texture using gradients (no external assets) */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(1200px 500px at 50% -10%, rgba(225,29,29,0.10), transparent 60%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 2px, transparent 2px 4px);
+      z-index: 0;
+    }
+
+    /* ============================================================
+       STICKY TOP NAVIGATION
+       ============================================================ */
+    header.topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: linear-gradient(180deg, rgba(10,10,10,0.98), rgba(10,10,10,0.92));
+      backdrop-filter: blur(8px);
+      border-bottom: 2px solid var(--accent);
+      padding-top: var(--safe-top);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 14px 8px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-weight: 900;
+      font-family: var(--mono);
+      color: var(--ink);
+      line-height: 1;
+    }
+    .brand h1 .x { color: var(--accent); }
+    .brand .sub {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+    }
+
+    .tools {
+      display: flex;
+      gap: 8px;
+    }
+    .icon-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      font-size: 18px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .icon-btn:active { transform: scale(0.94); }
+    .icon-btn.active { border-color: var(--star); color: var(--star); }
+
+    /* ============================================================
+       HAMBURGER MENU
+       ============================================================ */
+    .icon-btn#btnMenu { font-size: 22px; }
+
+    .menu-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      background: rgba(0,0,0,0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s;
+    }
+    .menu-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .menu {
+      position: absolute;
+      top: calc(var(--safe-top) + 8px);
+      right: 12px;
+      min-width: 220px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 8px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+      transform: translateY(-8px) scale(0.97);
+      opacity: 0;
+      transition: transform .18s ease, opacity .18s ease;
+    }
+    .menu-overlay.open .menu { transform: translateY(0) scale(1); opacity: 1; }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: var(--ink);
+      padding: 14px 12px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .menu-item:active { background: var(--bg-card); }
+    .menu-item .mi-ico {
+      font-size: 18px;
+      width: 24px;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .menu-item.danger { color: var(--accent-2); }
+    .menu-item.danger .mi-ico { color: var(--accent-2); }
+    .menu-item + .menu-item { border-top: 1px solid var(--line); }
+
+    /* Stage tab strip */
+    nav.stages {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 8px 12px 12px;
+      scrollbar-width: none;
+    }
+    nav.stages::-webkit-scrollbar { display: none; }
+
+    .tab {
+      flex: 0 0 auto;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink-dim);
+      padding: 9px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .tab.main { border-left: 4px solid var(--accent); }
+    .tab.secondary { border-left: 4px solid var(--gold); }
+    .tab.current {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .tab.secondary.current {
+      background: var(--gold);
+      color: #161616;
+      border-color: var(--gold);
+    }
+
+    /* ============================================================
+       NEXT UP / ON NOW BANNER
+       ============================================================ */
+    .nextup {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      border: none;
+      border-top: 1px solid var(--line);
+      background: linear-gradient(90deg, rgba(225,29,29,0.16), rgba(20,20,20,0.0));
+      color: var(--ink);
+      padding: 10px 14px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .nextup[hidden] { display: none; }
+    .nextup:active { background: linear-gradient(90deg, rgba(225,29,29,0.28), rgba(20,20,20,0.0)); }
+    .nextup.on-now { background: linear-gradient(90deg, rgba(34,197,94,0.18), rgba(20,20,20,0.0)); }
+
+    .nu-dot {
+      flex: 0 0 auto;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 0 rgba(225,29,29,0.6);
+      animation: pulse 1.8s infinite;
+    }
+    .nextup.on-now .nu-dot { background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,0.6); animation: pulseG 1.4s infinite; }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(225,29,29,0.6); }
+      70%  { box-shadow: 0 0 0 9px rgba(225,29,29,0); }
+      100% { box-shadow: 0 0 0 0 rgba(225,29,29,0); }
+    }
+    @keyframes pulseG {
+      0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
+      70%  { box-shadow: 0 0 0 9px rgba(34,197,94,0); }
+      100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+
+    .nu-main { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+    .nu-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--accent-2);
+    }
+    .nextup.on-now .nu-label { color: #22c55e; }
+    .nu-band {
+      font-size: 16px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nu-meta {
+      font-size: 11px;
+      color: var(--ink-dim);
+      letter-spacing: .5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nu-band-star { color: var(--star); margin-right: 4px; }
+    .nu-more {
+      align-self: flex-start;
+      margin-top: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--accent);
+      color: var(--accent-2);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 9px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .nu-more[hidden] { display: none; }
+    .nu-more:active { transform: scale(0.94); }
+    .nu-count {
+      flex: 0 0 auto;
+      font-family: var(--mono);
+      font-weight: 800;
+      font-size: 14px;
+      color: var(--ink);
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 9px;
+      white-space: nowrap;
+    }
+
+    /* Brief flash when a band is focused from the banner / search */
+    .band.flash { animation: flash 1.4s ease; }
+    @keyframes flash {
+      0%, 100% { box-shadow: none; }
+      30% { box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(225,29,29,0.5); }
+    }
+
+    /* ============================================================
+       MAIN — horizontal scroll-snap stage carousel
+       ============================================================ */
+    main {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: flex;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      scrollbar-width: none;
+    }
+    main::-webkit-scrollbar { display: none; }
+
+    section.stage {
+      flex: 0 0 100%;
+      width: 100%;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      overflow-y: auto;
+      padding: 14px 14px calc(120px + var(--safe-bottom));
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Stacked layout — all stages in one vertical scroll */
+    main.stacked {
+      flex-direction: column;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scroll-snap-type: y proximity;
+    }
+    main.stacked section.stage {
+      flex: 0 0 auto;
+      width: 100%;
+      overflow-y: visible;
+      padding-bottom: 24px;
+      scroll-snap-align: start;
+    }
+    main.stacked section.stage:last-child {
+      padding-bottom: calc(120px + var(--safe-bottom));
+    }
+
+    /* Stage header card */
+    .stage-head {
+      position: relative;
+      border-radius: 16px;
+      padding: 18px 16px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .stage.main-stage .stage-head {
+      background:
+        linear-gradient(135deg, rgba(225,29,29,0.22), rgba(20,20,20,0.9)),
+        var(--bg-card);
+      border-color: rgba(225,29,29,0.5);
+      box-shadow: 0 0 0 1px rgba(225,29,29,0.15), 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .stage.secondary-stage .stage-head {
+      background:
+        linear-gradient(135deg, rgba(217,164,65,0.16), rgba(20,20,20,0.9)),
+        var(--bg-card-2);
+      border-color: rgba(217,164,65,0.4);
+    }
+
+    .stage-head .badge {
+      display: inline-block;
+      font-size: 10px;
+      letter-spacing: 2px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 4px 9px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .badge.main { background: var(--accent); color: #fff; }
+    .badge.secondary { background: var(--gold); color: #161616; }
+
+    .stage-head h2 {
+      margin: 0;
+      font-family: var(--mono);
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      line-height: 1.05;
+    }
+    .stage.main-stage .stage-head h2 { font-size: 34px; }
+    .stage.secondary-stage .stage-head h2 { font-size: 26px; }
+
+    .stage-head .count {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--ink-dim);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ============================================================
+       TIMELINE / BAND ROWS
+       ============================================================ */
+    .timeline { display: flex; flex-direction: column; gap: 10px; }
+
+    .band {
+      position: relative;
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 14px;
+      padding: 12px 12px 12px 14px;
+    }
+    .stage.secondary-stage .band { border-left-color: var(--gold); }
+    .band.starred { border-color: rgba(255,204,51,0.55); }
+
+    .band .time {
+      flex: 0 0 auto;
+      min-width: 58px;
+      font-family: var(--mono);
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: 1px;
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .band .time small {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--ink-faint);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .band .body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+    .band .name {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: .5px;
+      word-break: break-word;
+    }
+    .band .endtime {
+      margin-top: 3px;
+      font-size: 11px;
+      font-family: var(--mono);
+      letter-spacing: .5px;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+    }
+    .band .notes {
+      margin-top: 3px;
+      font-size: 13px;
+      color: var(--ink-dim);
+      word-break: break-word;
+    }
+
+    .band .actions { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+    .mini {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: var(--bg-2);
+      color: var(--ink);
+      font-size: 17px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+    .mini:active { transform: scale(0.92); }
+    .mini.star.on { color: var(--star); border-color: rgba(255,204,51,0.5); }
+    .mini.check.on { color: #22c55e; border-color: rgba(34,197,94,0.6); background: rgba(34,197,94,0.12); }
+
+    /* Ended shows: dimmed + struck through, moved to bottom section */
+    .band.ended { opacity: .55; border-left-color: #3a3a3a; }
+    .band.ended .name { text-decoration: line-through; text-decoration-color: var(--ink-faint); }
+    .band.ended .time { color: var(--ink-dim); }
+
+    .sec-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 20px 2px 12px;
+    }
+    .sec-head:first-child { margin-top: 4px; }
+    .sec-line { flex: 1; height: 1px; background: var(--line); }
+    .sec-title {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .sec-active .sec-title { color: #22c55e; }
+    .sec-active .sec-line { background: rgba(34,197,94,0.4); }
+    .sec-upcoming .sec-title { color: var(--accent-2); }
+    .sec-ended .sec-title { color: var(--ink-faint); }
+
+    /* Currently-playing band — green glow */
+    .band.live {
+      border-left-color: #22c55e;
+      box-shadow: 0 0 0 1px rgba(34,197,94,0.35), 0 0 18px rgba(34,197,94,0.18);
+    }
+    .band.live .time small { color: #22c55e; }
+
+    .empty.small { padding: 18px 16px; font-size: 13px; }
+
+    /* Row holding the date + overlap badges above the band name */
+    .badges-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .badges-row:empty { display: none; }
+
+    /* Clear, prominent date badge */
+    .date-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 9px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      white-space: nowrap;
+    }
+    .stage.secondary-stage .date-badge { background: var(--gold); color: #161616; }
+    .band.ended .date-badge { background: var(--ink-faint); color: #0a0a0a; }
+
+    /* Duration chip — how long the show lasts */
+    .dur-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      color: var(--ink-dim);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      white-space: nowrap;
+    }
+
+    /* Overlap warning badge inside a band card */
+    .overlap-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(217,164,65,0.16);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .overlap-badge:active { transform: scale(0.95); }
+    .band.has-overlap { border-left-color: var(--gold); }
+    .band.live.has-overlap { border-left-color: #22c55e; }
+
+    /* Per-stage sort control */
+    .sort-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 2px 12px;
+    }
+    .sort-label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      font-weight: 800;
+    }
+    .sort-select {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 14px;
+      font-family: var(--font);
+      font-weight: 700;
+    }
+    .sort-select:focus { outline: none; border-color: var(--accent); }
+
+    /* Empty state */
+    .empty {
+      text-align: center;
+      color: var(--ink-faint);
+      padding: 40px 16px;
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      font-size: 14px;
+      letter-spacing: 1px;
+    }
+    .empty .skull { font-size: 40px; display: block; margin-bottom: 8px; opacity: .6; }
+
+    /* ============================================================
+       FLOATING ADD BUTTON
+       ============================================================ */
+    .fab {
+      position: fixed;
+      right: 16px;
+      bottom: calc(18px + var(--safe-bottom));
+      z-index: 40;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-size: 34px;
+      font-weight: 700;
+      line-height: 1;
+      box-shadow: 0 8px 24px rgba(225,29,29,0.45);
+      cursor: pointer;
+    }
+    .fab:active { transform: scale(0.92); }
+
+    /* ============================================================
+       MODAL / BOTTOM SHEET
+       ============================================================ */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: auto; }
+
+    .sheet {
+      width: 100%;
+      max-width: 560px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-bottom: none;
+      border-radius: 20px 20px 0 0;
+      padding: 16px 16px calc(20px + var(--safe-bottom));
+      transform: translateY(100%);
+      transition: transform .25s ease;
+      max-height: 92dvh;
+      overflow-y: auto;
+    }
+    .overlay.open .sheet { transform: translateY(0); }
+
+    .sheet .grip { width: 44px; height: 5px; background: var(--line); border-radius: 99px; margin: 2px auto 14px; }
+    .sheet h3 {
+      margin: 0 0 16px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-size: 18px;
+    }
+
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .field input, .field textarea, .field select {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 16px; /* >=16px avoids iOS zoom-on-focus */
+      font-family: var(--font);
+    }
+    .field input:focus, .field textarea:focus, .field select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .field textarea { resize: vertical; min-height: 70px; }
+    .field .err { color: var(--accent-2); font-size: 12px; margin-top: 5px; display: none; }
+    .field.invalid input, .field.invalid select { border-color: var(--accent-2); }
+    .field.invalid .err { display: block; }
+
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost { background: var(--bg-card); color: var(--ink); border: 1px solid var(--line); }
+    .btn-danger { background: transparent; color: var(--accent-2); border: 1px solid rgba(255,59,59,0.4); }
+    .row-btns { display: flex; gap: 10px; margin-top: 4px; }
+    .row-btns .btn { flex: 1; }
+
+    /* ============================================================
+       SEARCH / PICKS PANEL (slides from top)
+       ============================================================ */
+    .panel {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      transform: translateY(-100%);
+      transition: transform .25s ease;
+      padding-top: var(--safe-top);
+    }
+    .panel.open { transform: translateY(0); }
+
+    .panel-head {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-head input {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 13px;
+      font-size: 16px;
+    }
+    .panel-head input:focus { outline: none; border-color: var(--accent); }
+    .panel-title {
+      font-family: var(--mono);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 16px;
+      flex: 1;
+      font-weight: 800;
+    }
+
+    .results { flex: 1; overflow-y: auto; padding: 12px 14px calc(20px + var(--safe-bottom)); }
+
+    .result {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .result .r-time { font-family: var(--mono); font-weight: 800; font-size: 18px; min-width: 52px; }
+    .result .r-body { flex: 1; min-width: 0; }
+    .result .r-name { font-size: 16px; font-weight: 800; }
+    .result .r-stage {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-top: 2px;
+    }
+    .result .r-star { color: var(--ink-faint); font-size: 18px; }
+    .result .r-star.on { color: var(--star); }
+
+    .seg {
+      display: flex;
+      gap: 6px;
+      padding: 10px 14px 0;
+    }
+    .seg button {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink-dim);
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ============================================================
+       SETTINGS SHEET
+       ============================================================ */
+    .settings-group {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 14px;
+      background: var(--bg-card);
+    }
+    .settings-group.danger-group { border-color: rgba(255,59,59,0.35); }
+    .settings-label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+    .settings-note { font-size: 13px; color: var(--ink-dim); margin: 0 0 12px; line-height: 1.4; }
+    .settings-note.small { font-size: 11px; color: var(--ink-faint); margin: 8px 0 0; }
+    .settings-group .btn { margin-bottom: 8px; }
+    .settings-group .btn:last-child { margin-bottom: 0; }
+    .settings-divider { height: 1px; background: var(--line); margin: 6px 0 12px; }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      cursor: pointer;
+    }
+    .toggle-row span { font-size: 15px; font-weight: 600; }
+    .toggle-row span small {
+      display: block;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--ink-faint);
+      margin-top: 3px;
+    }
+    /* iOS-style switch built from a checkbox */
+    .switch {
+      appearance: none;
+      -webkit-appearance: none;
+      flex: 0 0 auto;
+      width: 52px;
+      height: 30px;
+      border-radius: 99px;
+      background: var(--line);
+      position: relative;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .2s;
+    }
+    .switch:checked { background: var(--accent); }
+    .switch:checked::after { transform: translateX(22px); }
+
+    .lead-select {
+      flex: 0 0 auto;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 15px;
+      font-family: var(--font);
+      font-weight: 700;
+    }
+    .lead-select:focus { outline: none; border-color: var(--accent); }
+
+    /* ============================================================
+       GENERIC CUSTOM DIALOG
+       ============================================================ */
+    .dialog-overlay { align-items: center; padding: 20px; z-index: 150; }
+    .dialog {
+      width: 100%;
+      max-width: 420px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px 20px 18px;
+      text-align: center;
+      transform: scale(0.9);
+      opacity: 0;
+      transition: transform .2s ease, opacity .2s ease;
+    }
+    .dialog-overlay.open .dialog { transform: scale(1); opacity: 1; }
+    .dlg-icon { font-size: 40px; line-height: 1; margin-bottom: 10px; }
+    .dialog.danger { border-color: rgba(255,59,59,0.5); }
+    .dialog.danger .dlg-icon { color: var(--accent-2); }
+    .dialog h3 {
+      margin: 0 0 8px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-size: 17px;
+    }
+    .dialog p { margin: 0 0 16px; color: var(--ink-dim); font-size: 14px; line-height: 1.5; }
+    .dlg-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      text-align: left;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .dlg-check input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--accent); }
+    .dialog .row-btns { margin-top: 0; }
+    .btn:disabled { opacity: .4; pointer-events: none; }
+
+    /* Same-time slot popup */
+    .slot-dialog { text-align: left; }
+    .slot-dialog .dlg-icon, .slot-dialog h3 { text-align: center; }
+    #slotSub { text-align: center; }
+    .slot-list { max-height: 50vh; overflow-y: auto; margin-bottom: 14px; }
+    .slot-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .slot-item:active { background: var(--bg-2); }
+    .slot-item .s-time { font-family: var(--mono); font-weight: 800; font-size: 15px; min-width: 92px; }
+    .slot-item .s-body { flex: 1; min-width: 0; }
+    .slot-item .s-name { font-size: 16px; font-weight: 800; }
+    .slot-item .s-stage { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-dim); margin-top: 2px; }
+    .slot-item .s-star { color: var(--ink-faint); font-size: 18px; }
+    .slot-item .s-star.on { color: var(--star); }
+    .slot-item .s-warn { color: var(--gold); font-size: 18px; }
+    .slot-item .s-name .vs { color: var(--gold); font-weight: 900; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(90px + var(--safe-bottom));
+      transform: translateX(-50%) translateY(20px);
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s, transform .2s;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!-- ============================================================
+       TOP BAR + STICKY STAGE NAV
+       ============================================================ -->
+  <header class="topbar">
+    <div class="brand">
+      <div>
+        <h1>BRUTAL<span class="x">/</span>ASSAULT</h1>
+        <div class="sub">Personal Stage Schedule</div>
+      </div>
+      <div class="tools">
+        <button class="icon-btn" id="btnMenu" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">&#9776;</button>
+      </div>
+    </div>
+    <nav class="stages" id="tabs"><!-- tabs injected by JS --></nav>
+
+    <!-- Live "next up / on now" banner driven by the device clock -->
+    <div class="nextup" id="nextUp" hidden>
+      <span class="nu-dot"></span>
+      <div class="nu-main" id="nuMain" role="button" tabindex="0" aria-label="Jump to upcoming show">
+        <span class="nu-label" id="nuLabel">NEXT UP</span>
+        <span class="nu-band" id="nuBand"></span>
+        <span class="nu-meta" id="nuMeta"></span>
+        <button class="nu-more" id="nuMore" hidden type="button"></button>
+      </div>
+      <span class="nu-count" id="nuCount"></span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       HAMBURGER MENU (holds Picks / Search / Settings / Reset)
+       ============================================================ -->
+  <div class="menu-overlay" id="menuOverlay">
+    <div class="menu" role="menu" aria-label="Main menu">
+      <button class="menu-item" id="btnPicks" role="menuitem">
+        <span class="mi-ico">&#9733;</span> My Picks
+      </button>
+      <button class="menu-item" id="btnSearch" role="menuitem">
+        <span class="mi-ico">&#128269;</span> Search
+      </button>
+      <button class="menu-item" id="btnSettings" role="menuitem">
+        <span class="mi-ico">&#9881;</span> Settings
+      </button>
+      <button class="menu-item danger" id="btnReset" role="menuitem">
+        <span class="mi-ico">&#8634;</span> Reset / Roll back
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STAGE CAROUSEL
+       ============================================================ -->
+  <main id="carousel"><!-- stage sections injected by JS --></main>
+
+  <!-- Floating add button -->
+  <button class="fab" id="fab" aria-label="Add band">+</button>
+
+  <!-- ============================================================
+       ADD / EDIT BOTTOM SHEET
+       ============================================================ -->
+  <div class="overlay" id="overlay">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <div class="grip"></div>
+      <h3 id="sheetTitle">Add Band</h3>
+      <form id="bandForm" novalidate>
+        <input type="hidden" id="bandId" />
+
+        <div class="field" id="f-name">
+          <label for="iName">Band Name</label>
+          <input type="text" id="iName" autocomplete="off" placeholder="e.g. MESHUGGAH" />
+          <div class="err">Band name is required.</div>
+        </div>
+
+        <div class="field" id="f-date">
+          <label for="iDate">Date</label>
+          <input type="date" id="iDate" />
+          <div class="err">Date is required.</div>
+        </div>
+
+        <div class="field" id="f-time">
+          <label for="iTime">Start Time</label>
+          <input type="time" id="iTime" />
+          <div class="err">Start time is required.</div>
+        </div>
+
+        <div class="field" id="f-end">
+          <label for="iEnd">End Time (optional)</label>
+          <input type="time" id="iEnd" />
+          <div class="err">End time must be after the start time.</div>
+        </div>
+
+        <div class="field" id="f-stage">
+          <label for="iStage">Stage</label>
+          <select id="iStage"></select>
+        </div>
+
+        <div class="field">
+          <label for="iNotes">Notes (optional)</label>
+          <textarea id="iNotes" placeholder="Pit plans, must-see solo, meet friends..."></textarea>
+        </div>
+
+        <div class="row-btns">
+          <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveBtn">Save</button>
+        </div>
+        <div class="row-btns" id="deleteRow">
+          <button type="button" class="btn btn-danger" id="deleteBtn">Delete Band</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SEARCH / PICKS PANEL
+       ============================================================ -->
+  <div class="panel" id="panel">
+    <div class="panel-head">
+      <span class="panel-title" id="panelTitle">Search</span>
+      <input type="search" id="searchInput" placeholder="Search bands across all stages..." autocomplete="off" />
+      <button class="icon-btn" id="panelClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="seg" id="panelSeg">
+      <button data-mode="all" class="on">All Bands</button>
+      <button data-mode="picks">&#9733; My Picks</button>
+    </div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <!-- ============================================================
+       SETTINGS BOTTOM SHEET
+       ============================================================ -->
+  <div class="overlay" id="settingsOverlay">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="grip"></div>
+      <h3 id="settingsTitle">Settings</h3>
+
+      <!-- Display options -->
+      <div class="settings-group">
+        <div class="settings-label">Display</div>
+        <label class="toggle-row" for="setShowReset">
+          <span>
+            Show reset button in top bar
+            <small>Hide the &#8634; button to avoid accidental taps.</small>
+          </span>
+          <input type="checkbox" id="setShowReset" class="switch" />
+        </label>
+      </div>
+
+      <!-- Overlap check -->
+      <div class="settings-group">
+        <div class="settings-label">Schedule Check</div>
+        <p class="settings-note" id="overlapStatus"></p>
+        <button type="button" class="btn btn-ghost" id="overlapsBtn">&#9888; View overlapping shows</button>
+      </div>
+
+      <!-- Calendar -->
+      <div class="settings-group">
+        <div class="settings-label">Calendar</div>
+        <label class="toggle-row" for="setLead" style="cursor:default">
+          <span>
+            Reminder before show
+            <small>Alarm added to each calendar event.</small>
+          </span>
+          <select id="setLead" class="lead-select">
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="15">15 min</option>
+            <option value="20">20 min</option>
+            <option value="25">25 min</option>
+            <option value="30">30 min</option>
+            <option value="35">35 min</option>
+            <option value="40">40 min</option>
+            <option value="45">45 min</option>
+            <option value="50">50 min</option>
+          </select>
+        </label>
+        <div class="settings-divider"></div>
+        <button type="button" class="btn btn-primary" id="calBtn">&#128197; Export to Calendar</button>
+        <p class="settings-note small">Exports the entire schedule (every band). On iPhone this opens the share sheet so you can add all events straight to iOS Calendar — your calendar then sends the reminders.</p>
+      </div>
+
+      <!-- Layout + data import/export -->
+      <div class="settings-group">
+        <div class="settings-label">Layout &amp; Data</div>
+        <label class="toggle-row" for="setLayout" style="cursor:default">
+          <span>
+            Stage layout
+            <small>Swipe between stages or scroll them stacked.</small>
+          </span>
+          <select id="setLayout" class="lead-select">
+            <option value="swipe">Swipe</option>
+            <option value="stack">Stacked</option>
+          </select>
+        </label>
+        <div class="settings-divider"></div>
+        <button type="button" class="btn btn-ghost" id="exportBtn">&#11015; Export schedule (.json)</button>
+        <button type="button" class="btn btn-ghost" id="importBtn">&#11014; Import schedule (.json)</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden />
+        <p class="settings-note small">Export backs up every band, star and ended mark. Import replaces your current schedule.</p>
+      </div>
+
+      <!-- Document export (Word / Google Docs) -->
+      <div class="settings-group">
+        <div class="settings-label">Document Export</div>
+        <button type="button" class="btn btn-ghost" id="docBtn">&#128196; Export as table (Word / Google Docs)</button>
+        <p class="settings-note small">Downloads a <b>.doc</b> table of every band. Opens directly in Microsoft Word. For Google Docs: upload the file to Google Drive and open it with Google Docs (it converts automatically).</p>
+      </div>
+
+      <!-- Rollback configuration -->
+      <div class="settings-group danger-group">
+        <div class="settings-label">Rollback Point</div>
+        <p class="settings-note" id="rollbackStatus"></p>
+        <button type="button" class="btn btn-ghost" id="saveRollbackBtn">&#128190; Save current schedule as rollback point</button>
+        <button type="button" class="btn btn-ghost hidden" id="clearRollbackBtn">&#9851; Use built-in example data instead</button>
+        <div class="settings-divider"></div>
+        <button type="button" class="btn btn-danger" id="doResetBtn">&#9888; Reset / Roll back now</button>
+        <p class="settings-note small">This restores the rollback point and discards your current changes.</p>
+      </div>
+
+      <div class="row-btns">
+        <button type="button" class="btn btn-ghost" id="settingsClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       "SAME TIME" POPUP — every band playing in the current slot
+       ============================================================ -->
+  <div class="overlay dialog-overlay" id="slotOverlay">
+    <div class="dialog slot-dialog" role="dialog" aria-modal="true" aria-labelledby="slotTitle">
+      <div class="dlg-icon">&#127908;</div>
+      <h3 id="slotTitle">Same Time Slot</h3>
+      <p id="slotSub"></p>
+      <div class="slot-list" id="slotList"></div>
+      <div class="row-btns">
+        <button type="button" class="btn btn-ghost" id="slotClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       GENERIC CUSTOM DIALOG (replaces native alert/confirm)
+       ============================================================ -->
+  <div class="overlay dialog-overlay" id="dialogOverlay">
+    <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dlgTitle">
+      <div class="dlg-icon" id="dlgIcon">&#9888;</div>
+      <h3 id="dlgTitle"></h3>
+      <p id="dlgMsg"></p>
+      <label class="dlg-check hidden" id="dlgCheckWrap">
+        <input type="checkbox" id="dlgCheck" />
+        <span id="dlgCheckLabel"></span>
+      </label>
+      <div class="row-btns">
+        <button type="button" class="btn btn-ghost hidden" id="dlgCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="dlgConfirm">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+  "use strict";
+  /* =================================================================
+     BRUTAL ASSAULT — single-file offline schedule app.
+     Vanilla JS only. State persisted in localStorage.
+     ================================================================= */
+
+  // Stage order + classification. Main stages get dominant styling.
+  const STAGES = ["SEA SHEPHERD", "MARSHALL", "OBSCURE", "OCTAGON"];
+  const STAGE_TYPE = {
+    "SEA SHEPHERD": "main",
+    "MARSHALL": "main",
+    "OBSCURE": "secondary",
+    "OCTAGON": "secondary"
+  };
+
+  const LS_SCHEDULE = "ba_schedule_v1";
+  const LS_PICKS = "ba_picks_v1";
+  const LS_ENDED = "ba_ended_v1";
+  const LS_SETTINGS = "ba_settings_v1";
+  const LS_ROLLBACK = "ba_rollback_v1";
+  const LS_ICSSEQ = "ba_icsseq_v1";
+  const LS_SORT = "ba_sort_v1";
+
+  // Festival date range (YYYY-MM-DD). Used to default/limit the date picker.
+  const FESTIVAL = { start: "2026-08-04", end: "2026-08-08" };
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  // ---- Default example data (used on first run / reset) -----------
+  function defaultSchedule() {
+    return {
+      "SEA SHEPHERD": [
+        { id: uid(), name: "MESHUGGAH", date: "2026-08-06", time: "21:30", end: "22:45", notes: "Headliner — get there early" },
+        { id: uid(), name: "GOJIRA", date: "2026-08-05", time: "19:45", end: "20:55", notes: "" },
+        { id: uid(), name: "AT THE GATES", date: "2026-08-04", time: "18:00", end: "18:50", notes: "Melodic death classics" }
+      ],
+      "MARSHALL": [
+        { id: uid(), name: "BEHEMOTH", date: "2026-08-07", time: "22:00", end: "23:15", notes: "Full stage show" },
+        { id: uid(), name: "CARCASS", date: "2026-08-06", time: "20:15", end: "21:15", notes: "" },
+        { id: uid(), name: "OBITUARY", date: "2026-08-05", time: "18:30", end: "19:25", notes: "" }
+      ],
+      "OBSCURE": [
+        { id: uid(), name: "ULCERATE", date: "2026-08-04", time: "17:00", end: "17:50", notes: "Atmospheric tech death" },
+        { id: uid(), name: "FULL OF HELL", date: "2026-08-08", time: "15:30", end: "16:15", notes: "" }
+      ],
+      "OCTAGON": [
+        { id: uid(), name: "IMPERIAL TRIUMPHANT", date: "2026-08-07", time: "16:00", end: "16:50", notes: "Avant-garde, masks" },
+        { id: uid(), name: "BLOOD INCANTATION", date: "2026-08-08", time: "14:00", end: "14:50", notes: "Cosmic death metal" }
+      ]
+    };
+  }
+
+  // crypto.randomUUID with a safe fallback (older mobile browsers / file://)
+  function uid() {
+    try {
+      if (window.crypto && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    } catch (e) { /* ignore */ }
+    return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
+  // ---- State -----------------------------------------------------
+  let schedule = {};
+  let picks = {};          // { bandId: true } — starred / My Picks
+  let ended = {};          // { bandId: true } — shows that already happened
+  let settings = {};       // { showReset: bool }
+  let rollback = null;     // user-defined snapshot to roll back to (or null = built-in)
+  let sortModes = {};      // { stage: "time" | "abc" | "star" }
+  let overlapMap = {};     // { bandId: [ {band, stage}, ... ] } recomputed each render
+  let currentStageIndex = 0;
+  let panelMode = "all";   // "all" | "picks"
+
+  const DEFAULT_SETTINGS = { showReset: true, notifyLead: 25, layout: "swipe" };
+
+  /* =================================================================
+     PERSISTENCE — resilient to empty / corrupted localStorage.
+     ================================================================= */
+  function loadSchedule() {
+    let data = null;
+    try {
+      const raw = localStorage.getItem(LS_SCHEDULE);
+      if (raw) data = JSON.parse(raw);
+    } catch (e) {
+      console.warn("Schedule data corrupted, restoring defaults.", e);
+      data = null;
+    }
+    schedule = sanitizeSchedule(data) || defaultSchedule();
+  }
+
+  // Ensure the loaded object always has all 4 stages with valid bands.
+  function sanitizeSchedule(data) {
+    if (!data || typeof data !== "object") return null;
+    const clean = {};
+    let validStages = 0;
+    for (const stage of STAGES) {
+      const arr = Array.isArray(data[stage]) ? data[stage] : [];
+      if (Array.isArray(data[stage])) validStages++;
+      clean[stage] = arr
+        .filter(b => b && typeof b === "object")
+        .map(b => ({
+          // Only accept ids made of safe characters; otherwise regenerate.
+          // Prevents imported ids from breaking out of HTML attributes / CSS
+          // selectors (defense in depth alongside escaping at render time).
+          id: (typeof b.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(b.id)) ? b.id : uid(),
+          name: typeof b.name === "string" ? b.name : "",
+          date: typeof b.date === "string" ? b.date : "",
+          time: typeof b.time === "string" ? b.time : "",
+          end: typeof b.end === "string" ? b.end : "",
+          notes: typeof b.notes === "string" ? b.notes : ""
+        }))
+        .filter(b => b.name); // drop nameless entries
+    }
+    return validStages > 0 ? clean : null;
+  }
+
+  function loadPicks() {
+    try {
+      const raw = localStorage.getItem(LS_PICKS);
+      const data = raw ? JSON.parse(raw) : {};
+      picks = (data && typeof data === "object" && !Array.isArray(data)) ? data : {};
+    } catch (e) {
+      console.warn("Picks data corrupted, resetting.", e);
+      picks = {};
+    }
+  }
+
+  function loadEnded() {
+    try {
+      const raw = localStorage.getItem(LS_ENDED);
+      const data = raw ? JSON.parse(raw) : {};
+      ended = (data && typeof data === "object" && !Array.isArray(data)) ? data : {};
+    } catch (e) {
+      console.warn("Ended data corrupted, resetting.", e);
+      ended = {};
+    }
+  }
+
+  function saveSchedule() {
+    try { localStorage.setItem(LS_SCHEDULE, JSON.stringify(schedule)); }
+    catch (e) { console.warn("Could not save schedule.", e); toast("Storage unavailable"); }
+  }
+  function savePicks() {
+    try { localStorage.setItem(LS_PICKS, JSON.stringify(picks)); }
+    catch (e) { console.warn("Could not save picks.", e); }
+  }
+  function saveEnded() {
+    try { localStorage.setItem(LS_ENDED, JSON.stringify(ended)); }
+    catch (e) { console.warn("Could not save ended shows.", e); }
+  }
+
+
+  function loadSettings() {
+    let data = null;
+    try {
+      const raw = localStorage.getItem(LS_SETTINGS);
+      if (raw) data = JSON.parse(raw);
+    } catch (e) { console.warn("Settings corrupted, using defaults.", e); }
+    settings = Object.assign({}, DEFAULT_SETTINGS, (data && typeof data === "object" ? data : {}));
+  }
+  function saveSettings() {
+    try { localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
+    catch (e) { console.warn("Could not save settings.", e); }
+  }
+
+  function loadSortModes() {
+    let data = null;
+    try {
+      const raw = localStorage.getItem(LS_SORT);
+      if (raw) data = JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+    sortModes = {};
+    STAGES.forEach(s => {
+      const v = data && data[s];
+      sortModes[s] = (v === "abc" || v === "star") ? v : "time";
+    });
+  }
+  function saveSortModes() {
+    try { localStorage.setItem(LS_SORT, JSON.stringify(sortModes)); }
+    catch (e) { /* ignore */ }
+  }
+
+  // The rollback snapshot stores a full state bundle the user chose to keep.
+  function loadRollback() {
+    try {
+      const raw = localStorage.getItem(LS_ROLLBACK);
+      if (!raw) { rollback = null; return; }
+      const data = JSON.parse(raw);
+      const clean = sanitizeSchedule(data && data.schedule);
+      rollback = clean ? {
+        schedule: clean,
+        picks: (data.picks && typeof data.picks === "object") ? data.picks : {},
+        ended: (data.ended && typeof data.ended === "object") ? data.ended : {},
+        savedAt: typeof data.savedAt === "string" ? data.savedAt : ""
+      } : null;
+    } catch (e) {
+      console.warn("Rollback snapshot corrupted, ignoring.", e);
+      rollback = null;
+    }
+  }
+  function saveRollbackSnapshot() {
+    rollback = {
+      schedule: JSON.parse(JSON.stringify(schedule)),
+      picks: JSON.parse(JSON.stringify(picks)),
+      ended: JSON.parse(JSON.stringify(ended)),
+      savedAt: new Date().toISOString()
+    };
+    try { localStorage.setItem(LS_ROLLBACK, JSON.stringify(rollback)); }
+    catch (e) { console.warn("Could not save rollback snapshot.", e); }
+  }
+  function clearRollbackSnapshot() {
+    rollback = null;
+    try { localStorage.removeItem(LS_ROLLBACK); }
+    catch (e) { console.warn("Could not clear rollback snapshot.", e); }
+  }
+
+  // Total bands across all stages — used in warning messages.
+  function totalBands() {
+    return STAGES.reduce((n, s) => n + (schedule[s] ? schedule[s].length : 0), 0);
+  }
+
+  /* =================================================================
+     HELPERS
+     ================================================================= */
+  // Sort bands ascending by full date+time. Undated/timeless entries last.
+  function sortStage(stage) {
+    schedule[stage].sort((a, b) => {
+      const sa = startMs(a), sb = startMs(b);
+      return (sa === null ? Infinity : sa) - (sb === null ? Infinity : sb);
+    });
+  }
+
+  // Two shows overlap when their [start, end) intervals intersect
+  // (dates included, since startMs/endMs are absolute timestamps).
+  function bandsOverlap(a, b) {
+    const as = startMs(a), ae = endMs(a), bs = startMs(b), be = endMs(b);
+    if (as === null || ae === null || bs === null || be === null) return false;
+    return as < be && bs < ae;
+  }
+
+  // Build { bandId: [ {band, stage} ] } for every show that clashes with
+  // at least one other show (across all stages).
+  function computeOverlaps() {
+    const flat = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => {
+      const s = startMs(b), e = endMs(b);
+      if (s !== null && e !== null) flat.push({ band: b, stage, s, e });
+    }));
+    const map = {};
+    for (let i = 0; i < flat.length; i++) {
+      for (let j = i + 1; j < flat.length; j++) {
+        const A = flat[i], B = flat[j];
+        if (A.s < B.e && B.s < A.e) {
+          (map[A.band.id] || (map[A.band.id] = [])).push({ band: B.band, stage: B.stage });
+          (map[B.band.id] || (map[B.band.id] = [])).push({ band: A.band, stage: A.stage });
+        }
+      }
+    }
+    return map;
+  }
+
+  // Unique overlapping pairs, time-sorted — for the settings popup.
+  function overlapPairs() {
+    const flat = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => {
+      const s = startMs(b), e = endMs(b);
+      if (s !== null && e !== null) flat.push({ band: b, stage, s, e });
+    }));
+    flat.sort((a, b) => a.s - b.s);
+    const pairs = [];
+    for (let i = 0; i < flat.length; i++) {
+      for (let j = i + 1; j < flat.length; j++) {
+        if (flat[i].s < flat[j].e && flat[j].s < flat[i].e) pairs.push([flat[i], flat[j]]);
+      }
+    }
+    return pairs;
+  }
+
+  // Apply a stage's display sort mode to a list of bands (non-mutating).
+  function applySort(arr, mode) {
+    const copy = arr.slice();
+    if (mode === "abc") {
+      copy.sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
+    } else if (mode === "star") {
+      copy.sort((a, b) => {
+        const pa = picks[a.id] ? 0 : 1, pb = picks[b.id] ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return (startMs(a) === null ? Infinity : startMs(a)) - (startMs(b) === null ? Infinity : startMs(b));
+      });
+    } else {
+      copy.sort((a, b) => (startMs(a) === null ? Infinity : startMs(a)) - (startMs(b) === null ? Infinity : startMs(b)));
+    }
+    return copy;
+  }
+
+  function findBand(id) {
+    for (const stage of STAGES) {
+      const idx = schedule[stage].findIndex(b => b.id === id);
+      if (idx !== -1) return { stage, idx, band: schedule[stage][idx] };
+    }
+    return null;
+  }
+
+  // Parse "HH:MM" into minutes since midnight, or null if invalid.
+  function timeToMinutes(t) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec((t || "").trim());
+    if (!m) return null;
+    const h = +m[1], mn = +m[2];
+    if (h > 23 || mn > 59) return null;
+    return h * 60 + mn;
+  }
+
+  // Human-friendly gaps, e.g. "in 2d 3h", "in 45m", "12m ago", "now".
+  function fmtGap(mins, suffix, prefix) {
+    if (mins <= 0) return "now";
+    const d = Math.floor(mins / 1440);
+    const h = Math.floor((mins % 1440) / 60);
+    const mn = mins % 60;
+    let s;
+    if (d) s = h ? `${d}d ${h}h` : `${d}d`;
+    else if (h) s = mn ? `${h}h ${mn}m` : `${h}h`;
+    else s = `${mn}m`;
+    return (prefix || "") + s + (suffix || "");
+  }
+
+  // Today's local date as "YYYY-MM-DD".
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  // Friendly short date, e.g. "Aug 4". Empty string if unparseable.
+  function fmtDateShort(dateStr) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || "");
+    if (!m) return "";
+    return MONTHS[+m[2] - 1] + " " + (+m[3]);
+  }
+
+  // Absolute epoch-ms for a date+time. Missing date falls back to today
+  // (keeps legacy time-only data behaving as before).
+  function dtMs(dateStr, timeStr) {
+    const t = timeToMinutes(timeStr);
+    if (t === null) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || todayStr());
+    if (!m) return null;
+    return new Date(+m[1], +m[2] - 1, +m[3], Math.floor(t / 60), t % 60, 0, 0).getTime();
+  }
+
+  function startMs(b) { return dtMs(b.date, b.time); }
+
+  // Compact duration label, e.g. "1h 15m", "45m", "2h".
+  function fmtDuration(min) {
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h && m) return h + "h " + m + "m";
+    if (h) return h + "h";
+    return m + "m";
+  }
+
+  // Show length in minutes, only when an explicit end time exists.
+  function bandDuration(b) {
+    if (!b.end) return null;
+    const s = startMs(b), e = endMs(b);
+    if (s === null || e === null) return null;
+    const min = Math.round((e - s) / 60000);
+    return min > 0 ? min : null;
+  }
+
+  // End instant. No end time -> assume a ~90 minute set; crossing midnight
+  // rolls the end to the next day.
+  function endMs(b) {
+    const s = startMs(b);
+    if (s === null) return null;
+    let e = dtMs(b.date, b.end);
+    if (e === null) return s + 90 * 60000;
+    if (e <= s) e += 24 * 60 * 60000;
+    return e;
+  }
+
+  /* Classify a show as "active" (playing now), "upcoming", or "ended",
+     using the device date+time plus manual overrides:
+     ended[id] === "ended" (or legacy true) -> forced ended.
+     ended[id] === "active"                 -> forced out of ended.        */
+  function classify(b) {
+    const ov = ended[b.id];
+    if (ov === "ended" || ov === true) return "ended";
+    const s = startMs(b), e = endMs(b), now = Date.now();
+    if (s === null) return "upcoming";
+    if (ov === "active") return (e !== null && now >= s && now < e) ? "active" : "upcoming";
+    if (e !== null && now >= e) return "ended";
+    if (now >= s) return "active";
+    return "upcoming";
+  }
+
+  function isShowEnded(b) { return classify(b) === "ended"; }
+
+  /* Find the show closest to the device clock.
+     - "now"  : a show that started within the last 90 min (latest one).
+     - "next" : the soonest upcoming show; wraps to the earliest show of
+                the day if everything today has already started. */
+  function computeNextUp() {
+    const now = Date.now();
+    const list = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => {
+      if (isShowEnded(b)) return;              // skip finished shows
+      const s = startMs(b);
+      if (s === null) return;                  // skip undated/timeless entries
+      list.push({ band: b, stage, s, e: endMs(b) });
+    }));
+    if (!list.length) return null;
+
+    // ON NOW — every show currently within its [start, end) window.
+    const playing = list.filter(it => it.e !== null && now >= it.s && now < it.e);
+    if (playing.length) return { mode: "now", group: playing };
+
+    // NEXT UP — the soonest start strictly in the future.
+    let nextS = null;
+    list.forEach(it => { if (it.s >= now && (nextS === null || it.s < nextS)) nextS = it.s; });
+    if (nextS === null) return null;           // nothing left — hide banner
+    const group = list.filter(it => it.s === nextS);
+    const diffMin = Math.round((nextS - now) / 60000);
+    return { mode: "next", group, diffMin };
+  }
+
+  // Choose which band of an overlapping slot to feature: a starred one
+  // first, otherwise a stable pseudo-random pick (so it doesn't flicker).
+  function pickPrimary(group) {
+    const starred = group.filter(g => picks[g.band.id]);
+    const pool = starred.length ? starred : group;
+    let h = 0;
+    const key = pool.map(g => g.band.id).join("");
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+    return pool[h % pool.length];
+  }
+
+  let nextUpBandId = null;
+  let nextUpStage = null;
+  let bannerGroup = [];   // full set of bands in the current banner slot
+
+  function updateNextUp() {
+    const el = document.getElementById("nextUp");
+    const info = computeNextUp();
+    if (!info) {
+      el.hidden = true; nextUpBandId = null; nextUpStage = null; bannerGroup = [];
+      return;
+    }
+
+    bannerGroup = info.group.slice();
+    const primary = pickPrimary(info.group);
+    nextUpBandId = primary.band.id;
+    nextUpStage = primary.stage;
+
+    const isStarred = !!picks[primary.band.id];
+    const ds = fmtDateShort(primary.band.date);
+    const metaBits = [];
+    if (ds) metaBits.push(ds);
+    metaBits.push(primary.band.time || "--:--");
+    metaBits.push(primary.stage);
+
+    el.hidden = false;
+    el.classList.toggle("on-now", info.mode === "now");
+    document.getElementById("nuLabel").textContent = info.mode === "now" ? "On Now" : "Next Up";
+    document.getElementById("nuBand").innerHTML =
+      (isStarred ? '<span class="nu-band-star">&#9733;</span>' : "") + esc(primary.band.name);
+    document.getElementById("nuMeta").textContent = metaBits.join("  \u00b7  ");
+    document.getElementById("nuCount").textContent = info.mode === "now"
+      ? fmtGap(Math.round((Date.now() - primary.s) / 60000), " ago")
+      : fmtGap(info.diffMin, "", "in ");
+
+    // "+N MORE" appears only when other bands share the same slot.
+    const more = document.getElementById("nuMore");
+    const others = info.group.length - 1;
+    if (others > 0) {
+      more.hidden = false;
+      more.textContent = "+" + others + " MORE";
+    } else {
+      more.hidden = true;
+    }
+  }
+
+  // Popup listing every band in the current banner slot.
+  // Shared popup renderer for a list of {band, stage} items. Tapping a
+  // row jumps to that band's stage and flashes it.
+  function renderListPopup(title, sub, items) {
+    const overlay = document.getElementById("slotOverlay");
+    document.getElementById("slotTitle").innerHTML = title;
+    document.getElementById("slotSub").textContent = sub || "";
+    const listEl = document.getElementById("slotList");
+
+    listEl.innerHTML = items.map(g => {
+      const starred = !!picks[g.band.id];
+      return `
+        <div class="slot-item" data-slot="${esc(g.band.id)}">
+          <div class="s-time">${esc(g.band.time || "--:--")}${g.band.end ? " &#8594; " + esc(g.band.end) : ""}</div>
+          <div class="s-body">
+            <div class="s-name">${esc(g.band.name)}</div>
+            <div class="s-stage">${fmtDateShort(g.band.date) ? esc(fmtDateShort(g.band.date)) + " &middot; " : ""}${esc(g.stage)}</div>
+          </div>
+          <span class="s-star ${starred ? "on" : ""}">${starred ? "&#9733;" : "&#9734;"}</span>
+        </div>`;
+    }).join("");
+
+    listEl.querySelectorAll("[data-slot]").forEach(el => el.addEventListener("click", () => {
+      const id = el.getAttribute("data-slot");
+      const found = findBand(id);
+      closeSlotPopup();
+      if (found) {
+        goToStage(STAGES.indexOf(found.stage));
+        flashBand(id);
+      }
+    }));
+
+    overlay.classList.add("open");
+  }
+
+  function openSlotPopup() {
+    if (!bannerGroup.length) return;
+    const first = bannerGroup[0].band;
+    const ds = fmtDateShort(first.date);
+    const sub = (ds ? ds + " \u00b7 " : "") + (first.time || "") + " — same time slot";
+    const items = bannerGroup.slice().sort((a, b) => a.stage.localeCompare(b.stage));
+    renderListPopup("\uD83C\uDFA4 Same Time Slot", sub, items);
+  }
+
+  // From a band's "⚠ Overlap" badge: show everything it clashes with.
+  function openOverlapDetail(bandId) {
+    const target = findBand(bandId);
+    const clashes = overlapMap[bandId];
+    if (!target || !clashes || !clashes.length) return;
+    const b = target.band;
+    const ds = fmtDateShort(b.date);
+    const sub = esc(b.name) + " overlaps with " + clashes.length + " show" + (clashes.length === 1 ? "" : "s")
+      + (ds ? "  \u00b7  " + ds : "");
+    const items = clashes.slice().sort((x, y) =>
+      (startMs(x.band) === null ? Infinity : startMs(x.band)) - (startMs(y.band) === null ? Infinity : startMs(y.band)));
+    renderListPopup("\u26A0 Overlaps", sub, items);
+  }
+
+  // From Settings: every overlapping pair across the whole schedule.
+  function openOverlapsPopup() {
+    const pairs = overlapPairs();
+    const overlay = document.getElementById("slotOverlay");
+    document.getElementById("slotTitle").innerHTML = "\u26A0 Overlapping Shows";
+    const listEl = document.getElementById("slotList");
+    if (!pairs.length) {
+      document.getElementById("slotSub").textContent = "No time clashes — you're all set.";
+      listEl.innerHTML = `<div class="empty"><span class="skull">&#9989;</span>No overlapping shows.</div>`;
+      overlay.classList.add("open");
+      return;
+    }
+    document.getElementById("slotSub").textContent = pairs.length + " clash" + (pairs.length === 1 ? "" : "es") + " found";
+    listEl.innerHTML = pairs.map(([A, B]) => {
+      const ds = fmtDateShort(A.band.date);
+      return `
+        <div class="slot-item" data-slot="${esc(A.band.id)}">
+          <div class="s-body">
+            <div class="s-name">${esc(A.band.name)} <span class="vs">&#8644;</span> ${esc(B.band.name)}</div>
+            <div class="s-stage">${ds ? esc(ds) + " &middot; " : ""}${esc(A.band.time || "")}–${esc(A.band.end || "?")} ${esc(A.stage)} &nbsp;vs&nbsp; ${esc(B.band.time || "")}–${esc(B.band.end || "?")} ${esc(B.stage)}</div>
+          </div>
+          <span class="s-warn">&#9888;</span>
+        </div>`;
+    }).join("");
+    listEl.querySelectorAll("[data-slot]").forEach(el => el.addEventListener("click", () => {
+      const id = el.getAttribute("data-slot");
+      const found = findBand(id);
+      closeSlotPopup();
+      if (found) { closeSettings(); goToStage(STAGES.indexOf(found.stage)); flashBand(id); }
+    }));
+    overlay.classList.add("open");
+  }
+
+  function closeSlotPopup() {
+    document.getElementById("slotOverlay").classList.remove("open");
+  }
+
+  /* Periodic clock sync: re-render only when the set of auto-ended shows
+     actually changes (rare), preserving the current stage position so the
+     view doesn't jump while browsing. Otherwise just refresh the banner. */
+  let lastEndedSig = "";
+  function autoEndedSignature() {
+    const parts = [];
+    STAGES.forEach(s => schedule[s].forEach(b => parts.push(b.id + ":" + classify(b))));
+    return parts.join(",");
+  }
+  function syncAutoEnded() {
+    const sig = autoEndedSignature();
+    if (sig !== lastEndedSig) {
+      lastEndedSig = sig;
+      const idx = currentStageIndex;
+      renderStages();              // also refreshes the banner
+      scrollToStage(idx, false);   // preserve position after re-render
+    } else {
+      updateNextUp();
+    }
+  }
+
+  // Scroll a band's row into view and briefly highlight it.
+  function flashBand(id) {
+    requestAnimationFrame(() => {
+      const carousel = document.getElementById("carousel");
+      const btn = carousel.querySelector(`[data-star="${id}"]`);
+      const row = btn ? btn.closest(".band") : null;
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.classList.remove("flash");
+        void row.offsetWidth; // restart the animation
+        row.classList.add("flash");
+      }
+    });
+  }
+
+  // Jump to the featured band's stage and highlight its row.
+  function goToNextUp() {
+    if (!nextUpBandId || !nextUpStage) return;
+    goToStage(STAGES.indexOf(nextUpStage));
+    flashBand(nextUpBandId);
+  }
+
+  // Escape user text before injecting into innerHTML.
+  function esc(str) {
+    return String(str).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  /* =================================================================
+     RENDERING
+     ================================================================= */
+  function renderTabs() {
+    const tabs = document.getElementById("tabs");
+    tabs.innerHTML = "";
+    STAGES.forEach((stage, i) => {
+      const b = document.createElement("button");
+      b.className = "tab " + STAGE_TYPE[stage] + (i === currentStageIndex ? " current" : "");
+      b.textContent = stage;
+      b.addEventListener("click", () => goToStage(i));
+      tabs.appendChild(b);
+    });
+  }
+
+  function renderStages() {
+    overlapMap = computeOverlaps();      // refresh clash data for this render
+    const wrap = document.getElementById("carousel");
+    wrap.innerHTML = "";
+    STAGES.forEach((stage, sIndex) => {
+      const type = STAGE_TYPE[stage];
+      const section = document.createElement("section");
+      section.className = "stage " + (type === "main" ? "main-stage" : "secondary-stage");
+      section.dataset.stage = stage;
+
+      sortStage(stage);
+      const bands = schedule[stage];
+      const badgeLabel = type === "main" ? "MAIN STAGE" : "SECONDARY STAGE";
+      const mode = sortModes[stage] || "time";
+
+      // Group by live status, derived from the device date+time + overrides.
+      const active = applySort(bands.filter(b => classify(b) === "active"), mode);
+      const upcoming = applySort(bands.filter(b => classify(b) === "upcoming"), mode);
+      const finished = applySort(bands.filter(b => classify(b) === "ended"), mode);
+
+      const secHead = (cls, label, n) =>
+        `<div class="sec-head sec-${cls}"><span class="sec-line"></span><span class="sec-title">${label} (${n})</span><span class="sec-line"></span></div>`;
+      const timeline = (arr) => `<div class="timeline">${arr.map(b => bandRow(b)).join("")}</div>`;
+
+      let body = "";
+      if (bands.length === 0) {
+        body = `<div class="empty"><span class="skull">&#128128;</span>No bands yet on this stage.<br/>Tap + to add one.</div>`;
+      } else {
+        // ACTIVE NOW (only when something is playing)
+        if (active.length) {
+          body += secHead("active", "&#9654; Active Now", active.length) + timeline(active);
+        }
+        // UPCOMING (always shown so the section is clear)
+        body += secHead("upcoming", "Upcoming Shows", upcoming.length);
+        body += upcoming.length
+          ? timeline(upcoming)
+          : `<div class="empty small">No upcoming shows.</div>`;
+        // ENDED (bottom, only when there are finished shows)
+        if (finished.length) {
+          body += secHead("ended", "&#9989; Ended Shows", finished.length)
+            + `<div class="timeline ended-list">${finished.map(b => bandRow(b)).join("")}</div>`;
+        }
+      }
+
+      const sortControl = `
+        <div class="sort-row">
+          <span class="sort-label">Sort</span>
+          <select class="sort-select" data-sortstage="${sIndex}" aria-label="Sort ${esc(stage)}">
+            <option value="time" ${mode === "time" ? "selected" : ""}>Start time</option>
+            <option value="abc" ${mode === "abc" ? "selected" : ""}>A–Z</option>
+            <option value="star" ${mode === "star" ? "selected" : ""}>&#9733; Starred first</option>
+          </select>
+        </div>`;
+
+      section.innerHTML = `
+        <div class="stage-head">
+          <span class="badge ${type}">${badgeLabel}</span>
+          <h2>${esc(stage)}</h2>
+          <div class="count">${active.length} active &middot; ${upcoming.length} upcoming &middot; ${finished.length} ended</div>
+        </div>
+        ${sortControl}
+        ${body}
+      `;
+      wrap.appendChild(section);
+    });
+
+    // Wire up row buttons (event delegation kept simple per-row)
+    wrap.querySelectorAll("[data-edit]").forEach(el =>
+      el.addEventListener("click", () => openSheet(el.getAttribute("data-edit"))));
+    wrap.querySelectorAll("[data-star]").forEach(el =>
+      el.addEventListener("click", () => toggleStar(el.getAttribute("data-star"))));
+    wrap.querySelectorAll("[data-end]").forEach(el =>
+      el.addEventListener("click", () => toggleEnded(el.getAttribute("data-end"))));
+    wrap.querySelectorAll("[data-overlap]").forEach(el =>
+      el.addEventListener("click", () => openOverlapDetail(el.getAttribute("data-overlap"))));
+    wrap.querySelectorAll("[data-sortstage]").forEach(el =>
+      el.addEventListener("change", () => {
+        sortModes[STAGES[+el.getAttribute("data-sortstage")]] = el.value;
+        saveSortModes();
+        const idx = currentStageIndex;
+        renderStages();
+        scrollToStage(idx, false);
+      }));
+
+    updateNextUp();
+  }
+
+  function bandRow(b) {
+    const starred = !!picks[b.id];
+    const cls = classify(b);
+    const finished = cls === "ended";
+    const time = b.time || "--:--";
+    // Clear, prominent date badge; end time stays as a small meta line.
+    const ds = fmtDateShort(b.date);
+    const dateBadge = ds ? `<span class="date-badge">${esc(ds.toUpperCase())}</span>` : "";
+    const dur = bandDuration(b);
+    const durBadge = dur ? `<span class="dur-badge">&#9201; ${esc(fmtDuration(dur))}</span>` : "";
+    const metaLine = b.end ? `<div class="endtime">&#8594; ends ${esc(b.end)}</div>` : "";
+    const clashes = overlapMap[b.id];
+    const overlapBadge = clashes && clashes.length
+      ? `<button class="overlap-badge" data-overlap="${esc(b.id)}" aria-label="Show overlapping shows">&#9888; Overlap (${clashes.length})</button>`
+      : "";
+    return `
+      <div class="band ${starred ? "starred" : ""} ${finished ? "ended" : ""} ${cls === "active" ? "live" : ""} ${clashes && clashes.length ? "has-overlap" : ""}">
+        <div class="time">${esc(time)}<small>${cls === "active" ? "Live" : "Start"}</small></div>
+        <div class="body">
+          <div class="badges-row">${dateBadge}${durBadge}${overlapBadge}</div>
+          <div class="name">${esc(b.name)}</div>
+          ${metaLine}
+          ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ""}
+        </div>
+        <div class="actions">
+          <button class="mini star ${starred ? "on" : ""}" data-star="${esc(b.id)}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
+          <button class="mini check ${finished ? "on" : ""}" data-end="${esc(b.id)}" aria-label="Mark as ended">&#10003;</button>
+          <button class="mini" data-edit="${esc(b.id)}" aria-label="Edit">&#9998;</button>
+        </div>
+      </div>`;
+  }
+
+  /* =================================================================
+     NAVIGATION between stages
+     ================================================================= */
+  // Scroll a stage into view, honoring the current layout (horizontal
+  // swipe vs vertical stack).
+  function scrollToStage(i, smooth) {
+    const carousel = document.getElementById("carousel");
+    const sections = carousel.querySelectorAll("section.stage");
+    if (!sections[i]) return;
+    const behavior = smooth ? "smooth" : "auto";
+    if (settings.layout === "stack") {
+      carousel.scrollTo({ top: sections[i].offsetTop, behavior });
+    } else {
+      carousel.scrollTo({ left: sections[i].offsetLeft, behavior });
+    }
+  }
+
+  function goToStage(i) {
+    currentStageIndex = i;
+    scrollToStage(i, true);
+    setActiveTab(i);
+  }
+
+  function setActiveTab(i) {
+    document.querySelectorAll("#tabs .tab").forEach((t, idx) =>
+      t.classList.toggle("current", idx === i));
+  }
+
+  // Index of the stage currently in view (works for both layouts).
+  function currentScrollIndex() {
+    const carousel = document.getElementById("carousel");
+    const sections = carousel.querySelectorAll("section.stage");
+    if (settings.layout === "stack") {
+      const st = carousel.scrollTop;
+      let idx = 0;
+      sections.forEach((s, k) => { if (s.offsetTop <= st + 90) idx = k; });
+      return idx;
+    }
+    return Math.round(carousel.scrollLeft / carousel.clientWidth);
+  }
+
+  // Keep the active tab in sync while the user scrolls/swipes.
+  function watchScroll() {
+    const carousel = document.getElementById("carousel");
+    let raf = null;
+    carousel.addEventListener("scroll", () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        const i = currentScrollIndex();
+        if (i !== currentStageIndex && i >= 0 && i < STAGES.length) {
+          currentStageIndex = i;
+          setActiveTab(i);
+        }
+      });
+    });
+  }
+
+  /* =================================================================
+     ADD / EDIT SHEET
+     ================================================================= */
+  const overlay = document.getElementById("overlay");
+  const form = document.getElementById("bandForm");
+
+  function fillStageSelect(selected) {
+    const sel = document.getElementById("iStage");
+    sel.innerHTML = STAGES.map(s =>
+      `<option value="${esc(s)}" ${s === selected ? "selected" : ""}>${esc(s)} (${STAGE_TYPE[s] === "main" ? "Main" : "Secondary"})</option>`
+    ).join("");
+  }
+
+  // editId === null -> add mode; otherwise edit existing band.
+  function openSheet(editId) {
+    clearErrors();
+    if (editId) {
+      const found = findBand(editId);
+      if (!found) return;
+      document.getElementById("sheetTitle").textContent = "Edit Band";
+      document.getElementById("bandId").value = found.band.id;
+      document.getElementById("iName").value = found.band.name;
+      document.getElementById("iDate").value = found.band.date || defaultFormDate();
+      document.getElementById("iTime").value = found.band.time;
+      document.getElementById("iEnd").value = found.band.end || "";
+      document.getElementById("iNotes").value = found.band.notes;
+      fillStageSelect(found.stage);
+      document.getElementById("deleteRow").classList.remove("hidden");
+    } else {
+      document.getElementById("sheetTitle").textContent = "Add Band";
+      form.reset();
+      document.getElementById("bandId").value = "";
+      document.getElementById("iDate").value = defaultFormDate();
+      fillStageSelect(STAGES[currentStageIndex]);
+      document.getElementById("deleteRow").classList.add("hidden");
+    }
+    overlay.classList.add("open");
+  }
+
+  function closeSheet() {
+    overlay.classList.remove("open");
+  }
+
+  function clearErrors() {
+    ["f-name", "f-date", "f-time", "f-end"].forEach(id => document.getElementById(id).classList.remove("invalid"));
+  }
+
+  // Sensible default date for the form: today if it falls inside the
+  // festival window, otherwise the festival's first day.
+  function defaultFormDate() {
+    const t = todayStr();
+    return (t >= FESTIVAL.start && t <= FESTIVAL.end) ? t : FESTIVAL.start;
+  }
+
+  function submitForm(e) {
+    e.preventDefault();
+    clearErrors();
+
+    const id = document.getElementById("bandId").value;
+    const name = document.getElementById("iName").value.trim();
+    const date = document.getElementById("iDate").value.trim();
+    const time = document.getElementById("iTime").value.trim();
+    const end = document.getElementById("iEnd").value.trim();
+    const notes = document.getElementById("iNotes").value.trim();
+    const stage = document.getElementById("iStage").value;
+
+    // Validation: name + date + time required; end (if set) after start.
+    let ok = true;
+    if (!name) { document.getElementById("f-name").classList.add("invalid"); ok = false; }
+    if (!date) { document.getElementById("f-date").classList.add("invalid"); ok = false; }
+    if (!time) { document.getElementById("f-time").classList.add("invalid"); ok = false; }
+    if (ok && end) {
+      const s = timeToMinutes(time), e = timeToMinutes(end);
+      // Only block when same-day end is before/equal start (midnight crossover allowed).
+      if (s !== null && e !== null && e <= s && e > 0 && (s - e) < 720) {
+        document.getElementById("f-end").classList.add("invalid"); ok = false;
+      }
+    }
+    if (!ok) return;
+
+    if (id) {
+      // EDIT — possibly move between stages.
+      const found = findBand(id);
+      if (found) {
+        const updated = { id, name, date, time, end, notes };
+        if (found.stage !== stage) {
+          schedule[found.stage].splice(found.idx, 1); // remove from old stage
+          schedule[stage].push(updated);              // add to new stage
+        } else {
+          schedule[found.stage][found.idx] = updated;
+        }
+      }
+      toast("Band updated");
+    } else {
+      // ADD
+      schedule[stage].push({ id: uid(), name, date, time, end, notes });
+      toast("Band added");
+    }
+
+    sortStage(stage);
+    saveSchedule();
+    renderStages();
+    // Jump to the stage the band ended up on.
+    const targetIndex = STAGES.indexOf(stage);
+    if (targetIndex !== -1) goToStage(targetIndex);
+    closeSheet();
+    if (!document.getElementById("panel").classList.contains("open")) {} // no-op
+    refreshPanelIfOpen();
+  }
+
+  function deleteCurrent() {
+    const id = document.getElementById("bandId").value;
+    if (!id) return;
+    const found = findBand(id);
+    if (found) {
+      schedule[found.stage].splice(found.idx, 1);
+      delete picks[id];
+      delete ended[id];
+      saveSchedule();
+      savePicks();
+      saveEnded();
+      renderStages();
+      toast("Band deleted");
+    }
+    closeSheet();
+    refreshPanelIfOpen();
+  }
+
+  /* =================================================================
+     STARS / MY PICKS
+     ================================================================= */
+  function toggleStar(id) {
+    if (picks[id]) delete picks[id];
+    else picks[id] = true;
+    savePicks();
+    renderStages();
+    refreshPanelIfOpen();
+  }
+
+  // Manual toggle — stores an override that wins over the clock-based
+  // auto-detection, so the user can always force a show in or out of ENDED.
+  function toggleEnded(id) {
+    const found = findBand(id);
+    if (!found) return;
+    const currentlyEnded = isShowEnded(found.band);
+    ended[id] = currentlyEnded ? "active" : "ended";
+    toast(currentlyEnded ? "Moved back to upcoming" : "Moved to ended shows");
+    saveEnded();
+    renderStages();
+    refreshPanelIfOpen();
+  }
+
+  /* =================================================================
+     SEARCH / PICKS PANEL
+     ================================================================= */
+  const panel = document.getElementById("panel");
+
+  function openPanel(mode) {
+    panelMode = mode;
+    document.getElementById("panelTitle").textContent = mode === "picks" ? "My Picks" : "Search";
+    document.querySelectorAll("#panelSeg button").forEach(b =>
+      b.classList.toggle("on", b.dataset.mode === mode));
+    panel.classList.add("open");
+    renderResults();
+    if (mode === "all") setTimeout(() => document.getElementById("searchInput").focus(), 250);
+  }
+
+  function closePanel() {
+    panel.classList.remove("open");
+  }
+
+  function refreshPanelIfOpen() {
+    if (panel.classList.contains("open")) renderResults();
+  }
+
+  // Build a flat, date+time-sorted list of all bands for search / picks.
+  function allBandsFlat() {
+    const list = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => list.push({ ...b, stage })));
+    list.sort((a, b) => {
+      const sa = startMs(a), sb = startMs(b);
+      return (sa === null ? Infinity : sa) - (sb === null ? Infinity : sb);
+    });
+    return list;
+  }
+
+  function renderResults() {
+    const q = document.getElementById("searchInput").value.trim().toLowerCase();
+    const out = document.getElementById("results");
+    let list = allBandsFlat();
+
+    if (panelMode === "picks") list = list.filter(b => picks[b.id]);
+    if (q) list = list.filter(b =>
+      b.name.toLowerCase().includes(q) ||
+      b.stage.toLowerCase().includes(q) ||
+      (b.notes || "").toLowerCase().includes(q));
+
+    if (list.length === 0) {
+      const msg = panelMode === "picks"
+        ? "No starred bands yet.<br/>Tap the &#9734; on any band to add it here."
+        : "No bands match your search.";
+      out.innerHTML = `<div class="empty"><span class="skull">&#128128;</span>${msg}</div>`;
+      return;
+    }
+
+    out.innerHTML = list.map(b => {
+      const starred = !!picks[b.id];
+      return `
+        <div class="result" data-open="${esc(b.id)}">
+          <div class="r-time">${esc(b.time || "--:--")}</div>
+          <div class="r-body">
+            <div class="r-name">${esc(b.name)}</div>
+            <div class="r-stage">${fmtDateShort(b.date) ? esc(fmtDateShort(b.date)) + " &middot; " : ""}${esc(b.stage)} &middot; ${STAGE_TYPE[b.stage] === "main" ? "Main" : "Secondary"}</div>
+          </div>
+          <button class="r-star ${starred ? "on" : ""}" data-pickstar="${esc(b.id)}" aria-label="Star">${starred ? "&#9733;" : "&#9734;"}</button>
+        </div>`;
+    }).join("");
+
+    // Tap result -> jump to its stage + open editor. Tap star -> toggle.
+    out.querySelectorAll("[data-open]").forEach(el => el.addEventListener("click", () => {
+      const id = el.getAttribute("data-open");
+      const found = findBand(id);
+      if (found) {
+        closePanel();
+        goToStage(STAGES.indexOf(found.stage));
+        openSheet(id);
+      }
+    }));
+    out.querySelectorAll("[data-pickstar]").forEach(el => el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      toggleStar(el.getAttribute("data-pickstar"));
+    }));
+  }
+
+  /* =================================================================
+     RESET / ROLLBACK — guarded by multiple custom confirmations.
+     Rolls back to the user's saved snapshot if one exists,
+     otherwise to the built-in example schedule.
+     ================================================================= */
+  function rollbackTargetLabel() {
+    if (rollback) {
+      const n = STAGES.reduce((c, s) => c + (rollback.schedule[s] ? rollback.schedule[s].length : 0), 0);
+      let when = "";
+      if (rollback.savedAt) {
+        const d = new Date(rollback.savedAt);
+        if (!isNaN(d)) when = " · saved " + d.toLocaleString();
+      }
+      return `your saved rollback point (${n} bands${when})`;
+    }
+    return "the built-in example schedule";
+  }
+
+  async function resetData() {
+    const target = rollbackTargetLabel();
+
+    // WARNING 1 — explain + require an explicit "I understand" checkbox.
+    const step1 = await showDialog({
+      title: "Roll back schedule?",
+      message: `This will replace your current schedule (<b>${totalBands()} bands</b>) with <b>${target}</b>.<br><br>Your current bands, picks and ended marks will be <b>permanently lost</b>.`,
+      icon: "&#9888;",
+      danger: true,
+      confirmText: "Continue",
+      cancelText: "Cancel",
+      checkLabel: "I understand my current changes will be permanently lost."
+    });
+    if (!step1) return;
+
+    // WARNING 2 — final, last-chance confirmation.
+    const step2 = await showDialog({
+      title: "Are you absolutely sure?",
+      message: "This action <b>cannot be undone</b>. There is no automatic backup of your current schedule.",
+      icon: "&#128165;",
+      danger: true,
+      confirmText: "Yes, roll back now",
+      cancelText: "Keep my schedule"
+    });
+    if (!step2) return;
+
+    applyRollback();
+  }
+
+  function applyRollback() {
+    if (rollback) {
+      schedule = sanitizeSchedule(rollback.schedule) || defaultSchedule();
+      picks = JSON.parse(JSON.stringify(rollback.picks || {}));
+      ended = JSON.parse(JSON.stringify(rollback.ended || {}));
+    } else {
+      schedule = defaultSchedule();
+      picks = {};
+      ended = {};
+    }
+    saveSchedule();
+    savePicks();
+    saveEnded();
+    renderStages();
+    goToStage(0);
+    refreshPanelIfOpen();
+    toast("Schedule rolled back");
+  }
+
+  /* =================================================================
+     SETTINGS
+     ================================================================= */
+  const settingsOverlay = document.getElementById("settingsOverlay");
+
+  function applySettings() {
+    // Show / hide the top-bar reset button per user preference.
+    document.getElementById("btnReset").classList.toggle("hidden", !settings.showReset);
+    applyLayout();
+  }
+
+  function applyLayout() {
+    document.getElementById("carousel").classList.toggle("stacked", settings.layout === "stack");
+  }
+
+  function changeLayout(e) {
+    settings.layout = e.target.value === "stack" ? "stack" : "swipe";
+    saveSettings();
+    applyLayout();
+    // Re-anchor to the current stage in the new layout.
+    requestAnimationFrame(() => scrollToStage(currentStageIndex, false));
+    toast("Layout: " + (settings.layout === "stack" ? "Stacked" : "Swipe"));
+  }
+
+  /* =================================================================
+     EXPORT / IMPORT — JSON backup of the full configuration.
+     ================================================================= */
+  function exportConfig() {
+    const data = {
+      app: "brutal-assault",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      schedule, picks, ended
+    };
+    try {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "brutal-assault-" + todayStr() + ".json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("Schedule exported");
+    } catch (e) {
+      console.warn("Export failed", e);
+      showAlert("Export failed", "Could not generate the export file on this device.");
+    }
+  }
+
+  // Trigger a file download from in-memory content.
+  function downloadFile(content, filename, mime) {
+    try {
+      const url = URL.createObjectURL(new Blob([content], { type: mime + ";charset=utf-8" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      return true;
+    } catch (e) {
+      console.warn("Download failed", e);
+      showAlert("Export failed", "Could not generate the file on this device.");
+      return false;
+    }
+  }
+
+  /* Export every band as a table in a Word-compatible .doc (HTML-based).
+     Opens directly in Microsoft Word; Google Docs opens it after the file
+     is uploaded to Drive (it auto-converts). No backend/libraries. */
+  function exportDocTable() {
+    const rows = [];
+    STAGES.forEach(stage => schedule[stage].forEach(b => rows.push({ b, stage })));
+    if (!rows.length) { showAlert("Nothing to export", "Add some bands first."); return; }
+    rows.sort((x, y) => {
+      const sx = startMs(x.b), sy = startMs(y.b);
+      return (sx === null ? Infinity : sx) - (sy === null ? Infinity : sy);
+    });
+
+    const headCells = ["Date", "Start", "End", "Length", "Stage", "Band", "\u2605", "Notes"];
+    const thStyle = "border:1px solid #888;padding:6px 8px;background:#d9d9d9;text-align:left;";
+    const tdStyle = "border:1px solid #888;padding:6px 8px;vertical-align:top;";
+    const headRow = "<tr>" + headCells.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join("") + "</tr>";
+    const bodyRows = rows.map(({ b, stage }) => {
+      const dur = bandDuration(b);
+      const cells = [
+        fmtDateShort(b.date) || "", b.time || "", b.end || "",
+        dur ? fmtDuration(dur) : "", stage, b.name || "",
+        picks[b.id] ? "\u2605" : "", b.notes || ""
+      ];
+      return "<tr>" + cells.map(c => `<td style="${tdStyle}">${esc(c)}</td>`).join("") + "</tr>";
+    }).join("");
+
+    const html = "\uFEFF" +
+      "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+      "xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>" +
+      "<head><meta charset='utf-8'><title>Brutal Assault Schedule</title></head>" +
+      "<body style=\"font-family:Arial,Helvetica,sans-serif;\">" +
+      "<h1 style=\"font-family:Arial,Helvetica,sans-serif;\">Brutal Assault — Band Schedule</h1>" +
+      `<p>Exported ${esc(new Date().toLocaleString())} &middot; ${rows.length} bands</p>` +
+      `<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:11pt;width:100%;">` +
+      headRow + bodyRows + "</table></body></html>";
+
+    if (downloadFile(html, "brutal-assault-" + todayStr() + ".doc", "application/msword")) {
+      toast("Table exported (" + rows.length + " bands)");
+    }
+  }
+
+  async function importConfigFile(file) {
+    if (!file) return;
+    let data;
+    try {
+      data = JSON.parse(await file.text());
+    } catch (e) {
+      showAlert("Import failed", "That file isn't valid JSON. Use a file exported from this app.");
+      return;
+    }
+    // Accept either a wrapped export or a raw schedule object.
+    const clean = sanitizeSchedule(data && data.schedule ? data.schedule : data);
+    if (!clean) {
+      showAlert("Import failed", "No valid schedule was found in that file.");
+      return;
+    }
+    const n = STAGES.reduce((c, s) => c + clean[s].length, 0);
+    const ok = await showDialog({
+      title: "Import schedule?",
+      message: `Replace your current schedule with the imported one (<b>${n} bands</b>)?<br><br>Your current data will be overwritten.`,
+      icon: "&#128229;",
+      danger: true,
+      confirmText: "Import",
+      cancelText: "Cancel"
+    });
+    if (!ok) return;
+
+    schedule = clean;
+    picks = (data && data.picks && typeof data.picks === "object" && !Array.isArray(data.picks)) ? data.picks : {};
+    ended = (data && data.ended && typeof data.ended === "object" && !Array.isArray(data.ended)) ? data.ended : {};
+    saveSchedule(); savePicks(); saveEnded();
+    renderStages();
+    goToStage(0);
+    refreshPanelIfOpen();
+    renderSettings();
+    toast("Schedule imported (" + n + " bands)");
+  }
+
+  function renderSettings() {
+    document.getElementById("setShowReset").checked = !!settings.showReset;
+    document.getElementById("setLead").value = String(settings.notifyLead || 25);
+
+    const nPairs = overlapPairs().length;
+    const ov = document.getElementById("overlapStatus");
+    const ob = document.getElementById("overlapsBtn");
+    if (nPairs > 0) {
+      ov.innerHTML = `&#9888; <b>${nPairs}</b> time clash${nPairs === 1 ? "" : "es"} between shows.`;
+      ob.disabled = false;
+    } else {
+      ov.innerHTML = "&#9989; No overlapping shows.";
+      ob.disabled = true;
+    }
+    document.getElementById("setLayout").value = settings.layout === "stack" ? "stack" : "swipe";
+    const status = document.getElementById("rollbackStatus");
+    if (rollback) {
+      const n = STAGES.reduce((c, s) => c + (rollback.schedule[s] ? rollback.schedule[s].length : 0), 0);
+      let when = "";
+      if (rollback.savedAt) {
+        const d = new Date(rollback.savedAt);
+        if (!isNaN(d)) when = " (saved " + d.toLocaleString() + ")";
+      }
+      status.innerHTML = `Reset will roll back to your <b>custom snapshot</b> — ${n} bands${esc(when)}.`;
+      document.getElementById("clearRollbackBtn").classList.remove("hidden");
+    } else {
+      status.innerHTML = `Reset will roll back to the <b>built-in example schedule</b>. Save a snapshot below to choose your own rollback point.`;
+      document.getElementById("clearRollbackBtn").classList.add("hidden");
+    }
+  }
+
+  function openSettings() {
+    renderSettings();
+    settingsOverlay.classList.add("open");
+  }
+  function closeSettings() {
+    settingsOverlay.classList.remove("open");
+  }
+
+  async function saveRollback() {
+    if (rollback) {
+      const ok = await showDialog({
+        title: "Overwrite rollback point?",
+        message: "You already have a saved rollback point. Replace it with the current schedule?",
+        icon: "&#128190;",
+        confirmText: "Overwrite",
+        cancelText: "Cancel"
+      });
+      if (!ok) return;
+    }
+    saveRollbackSnapshot();
+    renderSettings();
+    toast("Rollback point saved");
+  }
+
+  async function clearRollback() {
+    const ok = await showDialog({
+      title: "Clear rollback point?",
+      message: "Reset will go back to using the <b>built-in example schedule</b>. Your current schedule is not affected.",
+      icon: "&#9851;",
+      confirmText: "Clear",
+      cancelText: "Cancel"
+    });
+    if (!ok) return;
+    clearRollbackSnapshot();
+    renderSettings();
+    toast("Using built-in defaults");
+  }
+
+  function toggleShowReset(e) {
+    settings.showReset = e.target.checked;
+    saveSettings();
+    applySettings();
+  }
+
+  /* =================================================================
+     CALENDAR EXPORT (.ics) — the phone's calendar app then handles
+     the actual notifications. Each event carries a stable UID (so a
+     re-import updates rather than duplicates, where supported) and an
+     incrementing SEQUENCE. A VALARM adds a reminder before the show.
+
+     Note: true live auto-sync (edit here -> auto-update in the calendar)
+     is not possible for a static, offline, single-file app — that needs
+     a hosted, per-user ICS subscription served from a backend.
+     ================================================================= */
+  function changeNotifyLead(e) {
+    settings.notifyLead = parseInt(e.target.value, 10) || 25;
+    saveSettings();
+    toast("Calendar reminder: " + settings.notifyLead + " min before");
+  }
+
+  // Pad to 2 digits.
+  function p2(n) { return String(n).padStart(2, "0"); }
+
+  // Floating local timestamp "YYYYMMDDTHHMMSS" from epoch ms.
+  function icsLocal(ms) {
+    const d = new Date(ms);
+    return d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) +
+      "T" + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds());
+  }
+  // UTC stamp "YYYYMMDDTHHMMSSZ".
+  function icsUTC(ms) {
+    const d = new Date(ms);
+    return d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCDate()) +
+      "T" + p2(d.getUTCHours()) + p2(d.getUTCMinutes()) + p2(d.getUTCSeconds()) + "Z";
+  }
+  // Escape text for iCalendar fields.
+  function icsEsc(s) {
+    return String(s || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+  }
+  // Fold long lines to 75 octets per RFC 5545 (simple char-based fold).
+  function icsFold(line) {
+    if (line.length <= 75) return line;
+    let out = line.slice(0, 75);
+    let rest = line.slice(75);
+    while (rest.length > 74) { out += "\r\n " + rest.slice(0, 74); rest = rest.slice(74); }
+    out += "\r\n " + rest;
+    return out;
+  }
+
+  function nextIcsSequence() {
+    let seq = 0;
+    try { seq = parseInt(localStorage.getItem(LS_ICSSEQ) || "0", 10) || 0; } catch (e) {}
+    seq += 1;
+    try { localStorage.setItem(LS_ICSSEQ, String(seq)); } catch (e) {}
+    return seq;
+  }
+
+  function buildICS(onlyPicks) {
+    const lead = settings.notifyLead || 25;
+    const seq = nextIcsSequence();
+    const stamp = icsUTC(Date.now());
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Brutal Assault//Schedule//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      "X-WR-CALNAME:Brutal Assault" + (onlyPicks ? " (My Picks)" : "")
+    ];
+    STAGES.forEach(stage => schedule[stage].forEach(b => {
+      if (onlyPicks && !picks[b.id]) return;  // picks-only filter
+      const s = startMs(b);
+      if (s === null) return;                 // need a valid date+time
+      const e = endMs(b) || (s + 60 * 60000); // default 1h if no end
+      lines.push("BEGIN:VEVENT");
+      lines.push("UID:" + icsEsc(b.id) + "@brutal-assault");
+      lines.push("SEQUENCE:" + seq);
+      lines.push("DTSTAMP:" + stamp);
+      lines.push("DTSTART:" + icsLocal(s));
+      lines.push("DTEND:" + icsLocal(e));
+      lines.push(icsFold("SUMMARY:" + icsEsc(b.name + "  —  " + stage)));
+      lines.push(icsFold("LOCATION:" + icsEsc(stage + " Stage, Brutal Assault")));
+      if (b.notes) lines.push(icsFold("DESCRIPTION:" + icsEsc(b.notes)));
+      lines.push("BEGIN:VALARM");
+      lines.push("ACTION:DISPLAY");
+      lines.push(icsFold("DESCRIPTION:" + icsEsc(b.name + " starts soon")));
+      lines.push("TRIGGER:-PT" + lead + "M");
+      lines.push("END:VALARM");
+      lines.push("END:VEVENT");
+    }));
+    lines.push("END:VCALENDAR");
+    return lines.map(icsFold).join("\r\n");
+  }
+
+  // Export the ENTIRE schedule (every band). One-tap on iPhone via the
+  // Web Share sheet, with sensible fallbacks elsewhere.
+  async function exportCalendar() {
+    const count = STAGES.reduce((c, s) =>
+      c + schedule[s].filter(b => startMs(b) !== null).length, 0);
+    if (count === 0) {
+      showAlert("Nothing to add", "There are no dated shows to add to your calendar yet.");
+      return;
+    }
+    const ics = buildICS(false);
+    const filename = "brutal-assault-" + todayStr() + ".ics";
+    await shareOrDownloadICS(ics, filename, count);
+  }
+
+  // Prefer the native share sheet (best one-tap iOS Calendar flow); then
+  // an iOS data-URL open; then a normal file download.
+  async function shareOrDownloadICS(ics, filename, count) {
+    let file = null;
+    try { file = new File([ics], filename, { type: "text/calendar" }); } catch (e) { /* older browsers */ }
+
+    // 1) Native share with a file attachment (iOS 15+, Android Chrome).
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "Brutal Assault — Schedule" });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return;   // user dismissed the sheet
+        // any other error -> fall through to the next method
+      }
+    }
+
+    // 2) iOS without file-share support: open the .ics so Calendar can grab it.
+    const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent || "") ||
+      (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1);
+    if (isIOS) {
+      window.location.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
+      return;
+    }
+
+    // 3) Desktop / Android fallback: download the file.
+    try {
+      const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      toast((count || 0) + " shows exported");
+    } catch (err) {
+      console.warn("Calendar export failed", err);
+      showAlert("Export failed", "Could not generate the calendar file on this device.");
+    }
+  }
+
+  /* =================================================================
+     CUSTOM DIALOG SYSTEM — replaces native alert() / confirm().
+     Returns a Promise<boolean> (true = confirmed, false = cancelled).
+     opts: { title, message, icon, confirmText, cancelText, danger,
+             checkLabel }  — if checkLabel is set, confirm is disabled
+     until the checkbox is ticked.
+     ================================================================= */
+  let dialogResolver = null;
+
+  function showDialog(opts) {
+    const o = opts || {};
+    const overlay = document.getElementById("dialogOverlay");
+    const dialog = overlay.querySelector(".dialog");
+    const checkWrap = document.getElementById("dlgCheckWrap");
+    const check = document.getElementById("dlgCheck");
+    const confirmBtn = document.getElementById("dlgConfirm");
+    const cancelBtn = document.getElementById("dlgCancel");
+
+    document.getElementById("dlgIcon").innerHTML = o.icon || "&#9888;";
+    document.getElementById("dlgTitle").textContent = o.title || "";
+    document.getElementById("dlgMsg").innerHTML = o.message || "";
+    confirmBtn.textContent = o.confirmText || "OK";
+    dialog.classList.toggle("danger", !!o.danger);
+    confirmBtn.className = "btn " + (o.danger ? "btn-danger" : "btn-primary");
+
+    // Cancel button only shown for confirm-style dialogs.
+    if (o.cancelText === null) {
+      cancelBtn.classList.add("hidden");
+    } else {
+      cancelBtn.classList.remove("hidden");
+      cancelBtn.textContent = o.cancelText || "Cancel";
+    }
+
+    // Optional "I understand" checkbox gate.
+    check.checked = false;
+    if (o.checkLabel) {
+      checkWrap.classList.remove("hidden");
+      document.getElementById("dlgCheckLabel").textContent = o.checkLabel;
+      confirmBtn.disabled = true;
+      check.onchange = () => { confirmBtn.disabled = !check.checked; };
+    } else {
+      checkWrap.classList.add("hidden");
+      confirmBtn.disabled = false;
+      check.onchange = null;
+    }
+
+    overlay.classList.add("open");
+
+    return new Promise(resolve => {
+      dialogResolver = resolve;
+      const done = (result) => {
+        overlay.classList.remove("open");
+        confirmBtn.onclick = null;
+        cancelBtn.onclick = null;
+        overlay.onclick = null;
+        dialogResolver = null;
+        resolve(result);
+      };
+      confirmBtn.onclick = () => done(true);
+      cancelBtn.onclick = () => done(false);
+      overlay.onclick = (e) => { if (e.target === overlay) done(false); };
+    });
+  }
+
+  // Convenience: information popup with a single OK button.
+  function showAlert(title, message, icon) {
+    return showDialog({ title, message, icon: icon || "&#8505;", cancelText: null, confirmText: "OK" });
+  }
+
+  /* =================================================================
+     TOAST
+     ================================================================= */
+  let toastTimer = null;
+  function toast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+  }
+
+  /* =================================================================
+     EVENT WIRING + INIT
+     ================================================================= */
+  function init() {
+    loadSchedule();
+    loadPicks();
+    loadEnded();
+    loadSettings();
+    loadSortModes();
+    loadRollback();
+    renderTabs();
+    renderStages();
+    applySettings();
+    watchScroll();
+
+    // Keep the banner + auto-ended shows in sync with the device clock.
+    lastEndedSig = autoEndedSignature();
+    updateNextUp();
+    setInterval(syncAutoEnded, 20000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) syncAutoEnded(); });
+
+    const nuMain = document.getElementById("nuMain");
+    nuMain.addEventListener("click", goToNextUp);
+    nuMain.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToNextUp(); }
+    });
+    document.getElementById("nuMore").addEventListener("click", (e) => { e.stopPropagation(); openSlotPopup(); });
+    document.getElementById("slotClose").addEventListener("click", closeSlotPopup);
+    document.getElementById("slotOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "slotOverlay") closeSlotPopup();
+    });
+
+    document.getElementById("fab").addEventListener("click", () => openSheet(null));
+    document.getElementById("cancelBtn").addEventListener("click", closeSheet);
+    document.getElementById("deleteBtn").addEventListener("click", deleteCurrent);
+    form.addEventListener("submit", submitForm);
+
+    // Close sheet when tapping the dimmed backdrop.
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeSheet(); });
+
+    // Hamburger menu — holds Picks / Search / Settings / Reset.
+    const menuOverlay = document.getElementById("menuOverlay");
+    const btnMenu = document.getElementById("btnMenu");
+    const openMenu = () => { menuOverlay.classList.add("open"); btnMenu.setAttribute("aria-expanded", "true"); };
+    const closeMenu = () => { menuOverlay.classList.remove("open"); btnMenu.setAttribute("aria-expanded", "false"); };
+    btnMenu.addEventListener("click", () => {
+      menuOverlay.classList.contains("open") ? closeMenu() : openMenu();
+    });
+    menuOverlay.addEventListener("click", (e) => { if (e.target === menuOverlay) closeMenu(); });
+    // Every menu item closes the menu before running its action.
+    menuOverlay.querySelectorAll(".menu-item").forEach(el =>
+      el.addEventListener("click", closeMenu));
+
+    document.getElementById("btnReset").addEventListener("click", resetData);
+    document.getElementById("btnSearch").addEventListener("click", () => openPanel("all"));
+    document.getElementById("btnPicks").addEventListener("click", () => openPanel("picks"));
+    document.getElementById("panelClose").addEventListener("click", closePanel);
+
+    // Settings sheet
+    document.getElementById("btnSettings").addEventListener("click", openSettings);
+    document.getElementById("settingsClose").addEventListener("click", closeSettings);
+    settingsOverlay.addEventListener("click", (e) => { if (e.target === settingsOverlay) closeSettings(); });
+    document.getElementById("setShowReset").addEventListener("change", toggleShowReset);
+    document.getElementById("setLead").addEventListener("change", changeNotifyLead);
+    document.getElementById("calBtn").addEventListener("click", exportCalendar);
+    document.getElementById("overlapsBtn").addEventListener("click", openOverlapsPopup);
+    document.getElementById("setLayout").addEventListener("change", changeLayout);
+    document.getElementById("exportBtn").addEventListener("click", exportConfig);
+    document.getElementById("docBtn").addEventListener("click", exportDocTable);
+    document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
+    document.getElementById("importFile").addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0];
+      importConfigFile(f);
+      e.target.value = "";   // allow re-importing the same file
+    });
+    document.getElementById("saveRollbackBtn").addEventListener("click", saveRollback);
+    document.getElementById("clearRollbackBtn").addEventListener("click", clearRollback);
+    document.getElementById("doResetBtn").addEventListener("click", resetData);
+    document.getElementById("searchInput").addEventListener("input", renderResults);
+    document.querySelectorAll("#panelSeg button").forEach(b =>
+      b.addEventListener("click", () => openPanel(b.dataset.mode)));
+
+    // Escape key closes overlays (handy when testing on desktop).
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        // Dialog takes priority — cancel it instead of closing everything.
+        if (dialogResolver) { document.getElementById("dlgCancel").click(); return; }
+        closeMenu();
+        closeSheet();
+        closePanel();
+        closeSettings();
+        closeSlotPopup();
+      }
+    });
+
+    setActiveTab(0);
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+
+  /* Register the service worker for offline/installable PWA support.
+     Guarded so the app still runs fine when opened from file:// where
+     service workers are unavailable. */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch((e) =>
+        console.warn("Service worker registration skipped:", e));
+    });
+  }
+  </script>
+</body>
+</html>
